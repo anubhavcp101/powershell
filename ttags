@@ -1,0 +1,10 @@
+#
+$ttags =@{"x"="o";"o"="x"
+}
+$rids = @("resourceId_A","resourceId_B")
+foreach ($rid in $rids) {
+$ttags.Add("resource-name",$rid.Split("/")[-1])
+Update-AzTag -ResourceId $rid -Tag $ttags -Operation Merge
+#
+$ttags.Remove("resource-name")
+}
