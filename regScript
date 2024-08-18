@@ -1,0 +1,14 @@
+#
+$regPath = ""
+$regName = ""
+$regValue = ""
+if ( Test-Path $regPath ) {
+Set-ItemProperty -Path $regPath -Name $regName -Value $regValue
+Get-ItemProperty -Path $regPath
+#
+}
+else {
+New-Item -Path $regPath
+Set-ItemProperty -Path $regPath -Name $regName -Value $regValue
+Get-ItemProperty -Path $regPath
+}
