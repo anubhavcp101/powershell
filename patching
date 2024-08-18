@@ -1,0 +1,56 @@
+#
+dism /online /cleanup-image /restorehealth
+net stop wuauserv
+net stop cryptsvc
+net stop bits
+net start wuauserv
+net start cryptsvc
+#
+net start bits
+
+$comp = Get-WmiObject -Class Win32_ComputerSystem
+if ( $comp.AutomaticManagedPagefile){
+#
+  Write-Output "Automatically manage paging file size for all drives is enabled"
+} else {
+  Write-Output "Automatically manage paging file size for all drives is disabled"
+}
+## Registry Key for SIDs
+Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList" | Get-ChildItem
+
+## To enable Automatically manage paging file size
+set-wmiInstance -Class Win32_ComputerSystem -Arguments @{AutomaticManagedPagefile = $true}
+
+## regkeys
+$backupPath = "C:\Backup\regbkp.reg"
+if (-not(Test-Path -Path "C:\Backup")) {
+  New-Item -Path "C:\Backup" -ItemType Directory
+}
+reg export HKLM $backupPath
+if (Test-Path -Path $backupPath){
+  Write-Output "Backup: $backupPath"
+} else {
+  Write-Output "Not Found"
+}
+
+## To import from backup
+$backupPath = "C:\Backup\regbkp.reg"
+reg import $backupPath
+
+## Remove-ItemProperty  to remove registry keys 
+
+## to see cbs logs 30 lines only
+$getfile = (Get-ChildItem -Path "C:\Windows\Logs\CBS" | Where-Object { -not $_.PSIsContainer} | Sort-Object LastWriteTime -Descending)[0]
+#$getfile = (Get-ChildItem -Path "C:\Windows\Logs\CBS"| Sort-Object LastWriteTime -Descending)[0]
+$totallines = (Get-Content -Path $getfile.FullName).count
+$startline = if ($totallines -gt 30) { $totallines -30} else {0}
+Get-Content -Path $getfile.FullName | Select-Object -Skip $startline
+
+#Installing Updates using dism command
+# => Manually download update from microsoft update catalog 
+# => Save it in C:\update folder and create the folder if it doesn't exist
+<#if (-not(Test-Path -Path "C:\update")) {
+  New-Item -Path "C:\update" -ItemType Directory
+}#>
+expand -F:* C:\update\kb.msu C:\update
+dism /online /add-package /packagepath:C:\update\kb.cab
