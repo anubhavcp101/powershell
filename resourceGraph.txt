@@ -1,0 +1,32 @@
+// To get recovery service resources like vault, fabbic, protectionContainer, etc
+recoveryservicesresources
+| where type == "microsoft.recoveryservices/vaults/replicationfabrics/replicationprotectioncontainers/replicationprotecteditems"
+| project properties.friendlyName, vault = split(id,"/")[-7], fabric = split(id,"/")[-5], container = split(id,"/")[-3], id
+
+// To get insight resources like Data COllection rule, VMs and their associations
+insightsresources
+| where type == "microsoft.insights/datacollectionruleassociations"
+| project name, DCR = split( properties.dataCollectionRuleId,"/")[-1], VM = tostring( split(id,"/")[-5])
+
+// Storage account and their default netowrk access
+resources
+| where type == "microsoft.storage/storageaccounts"
+| project name, properties, properties.networkAcls.defaultAction
+
+// To get a view of different disks of VM and their disk encryption set along with the key vault and its key for encryption
+(resources
+| where type == "microsoft.compute/disks"
+| project name, properties,VM = split(managedBy,"/")[-1], diskEncryptionSet = tostring(split(properties.encryption.diskEncryptionSetId,"/")[-1]))
+| join kind = inner (resources
+| where type == "microsoft.compute/diskencryptionsets"
+| project tostring(name),keyVault = split(properties.activeKey.sourceVault.id,"/")[-1],key = split(properties.activeKey.keyUrl,"/")[4]) on $left.diskEncryptionSet == $right.name
+| project-away name1,properties
+
+// To get computers, their drive letters and their total space in GB
+InsightsMetrics
+ | where _SubscriptionId contains "7ab52b0e-c887-4a5f-8ab3-4afac537714f"
+ | where Namespace contains "logicaldisk" and Name contains "FreeSpaceMB"
+ | extend TotalSpaceGB = parse_json(tostring(Tags))["vm.azm.ms/diskSizeMB"]/1024 + 1
+ | extend driveletter = tostring(parse_json(tostring(Tags))["vm.azm.ms/mountId"])
+ | summarize arg_max(TimeGenerated,*) by Computer,driveletter
+ | project Computer, driveletter, TotalSpaceGB
