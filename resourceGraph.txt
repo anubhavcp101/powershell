@@ -30,3 +30,16 @@ InsightsMetrics
  | extend driveletter = tostring(parse_json(tostring(Tags))["vm.azm.ms/mountId"])
  | summarize arg_max(TimeGenerated,*) by Computer,driveletter
  | project Computer, driveletter, TotalSpaceGB
+
+// To find Azure VM without any DCR associations
+insightsresources
+| where type == "microsoft.insights/datacollectionruleassociations"
+| project name, DCR = split( properties.dataCollectionRuleId,"/")[-1], VM = tolower(tostring( split(id,"/")[-5]))
+| distinct VM
+| join kind=fullouter (
+resources
+| where type == "microsoft.compute/virtualmachines"
+| project VmName = tolower(name), resourceGroup, subscriptionId
+) on $left.VM == $right.VmName
+| where isempty( VM)
+| distinct VmName
