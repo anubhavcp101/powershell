@@ -7,7 +7,7 @@ $task = {
     Write-Host "Starting Job for" $vm.Name  
 
     Start-Sleep -Seconds 11
-
+    Write-Error "This is an error to be printed"
     Write-Host "Finished Job for" $vm.Name
 }
 #
@@ -15,7 +15,7 @@ $Global:jobs = @()
 $Global:jobCounter = 0
 $Global:totalJobs = 0
 
-$vms = Import-Csv -Path "./vms.csv" -Header "Name"
+$vms = Import-Csv -Path "./vms.csv" #-Header "Name"
 $Global:totalJobs = ($vms | Measure-Object).Count
 $vms | ForEach-Object {
     if ( $jobCounter -lt $maxJobCount) {
@@ -28,7 +28,7 @@ $vms | ForEach-Object {
 
 while ($true) {
     $currentlyRunningJobs = $Global:jobs | where State -EQ "Running" | where HasMoreData -EQ $true
-    Write-Host Current Job is #$currentlyRunningJobs
+    #Write-Host Current Job is #$currentlyRunningJobs
     if ((($currentlyRunningJobs|Measure-Object).Count -lt $maxJobCount) -and (($jobCounter) -lt $Global:totalJobs)) {
         Write-Host Starting Job of $vms[$Global:jobCounter].Name
         $job = Start-Job -Name $vms[$Global:jobCounter].Name -ScriptBlock $task -ArgumentList $vms[$Global:jobCounter]
