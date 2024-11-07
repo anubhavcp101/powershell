@@ -52,20 +52,18 @@ while ($true) {
             $failedJobs = $Global:jobs | where State -EQ "Failed" | where HasMoreData -EQ $true
             if (($failedJobs | Measure-Object).Count -gt 0) {
                 Write-Host Following Jobs Failed. Please Check
+                Write-Host ($failedJobs | Measure-Object).Count failed out of $Global:totalJobs
                 $failedJobs | Select-Object Id, Name, State, HasMoreData | Format-Table -AutoSize -RepeatHeader
+                $failedJobs | Select-Object Id, Name, State | Export-Csv -Path "./listOfFailedJobs.csv" -NoTypeInformation -Force
+                Start-Transcript -Path "./failedJobs.txt" -Force
                 $failedJobs | ForEach-Object {
                     ($_ | Select-Object Id, Name, State, HasMoreData | Format-Table -AutoSize -HideTableHeaders)
                     $errorDetails = (Receive-Job -Job $_ -Keep) 
                     Write-Host $errorDetails
                     # code to export a csv file containing failed job name and error details
                     # and this is still pending 
-                    # $errorInfo = [PSCustomObject]@{
-                    #     JobName = $_.Name;
-                    #     Error   = ($_.Error | ForEach-Object { $_.Exception.Message }) -join "; ";
-                    # }
-                    # $Global:errorFile += $errorInfo
                 }
-                $Global:errorFile | Export-Csv -Path "./failedJobs.csv" -NoTypeInformation -Force
+                Stop-Transcript
             }
             Write-Host All Jobs Finished
             break
