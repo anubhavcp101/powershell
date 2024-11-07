@@ -52,7 +52,7 @@ while ($true) {
             $failedJobs = $Global:jobs | where State -EQ "Failed" | where HasMoreData -EQ $true
             if (($failedJobs | Measure-Object).Count -gt 0) {
                 Write-Host Following Jobs Failed. Please Check
-                Write-Host ($failedJobs | Measure-Object).Count failed out of $Global:totalJobs
+                Write-Host ($failedJobs | Measure-Object).Count jobs failed out of $Global:totalJobs jobs
                 $failedJobs | Select-Object Id, Name, State, HasMoreData | Format-Table -AutoSize -RepeatHeader
                 $failedJobs | Select-Object Id, Name, State | Export-Csv -Path "./listOfFailedJobs.csv" -NoTypeInformation -Force
                 Start-Transcript -Path "./failedJobs.txt" -Force
@@ -63,9 +63,11 @@ while ($true) {
                     # code to export a csv file containing failed job name and error details
                     # and this is still pending 
                 }
+                Write-Host ($failedJobs | Measure-Object).Count jobs failed out of $Global:totalJobs jobs
                 Stop-Transcript
             }
             Write-Host All Jobs Finished
+            Write-Host ($failedJobs | Measure-Object).Count jobs failed out of $Global:totalJobs jobs
             break
         }
 
