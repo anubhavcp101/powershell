@@ -54,7 +54,7 @@ while ($true) {
                 $failedJobs | Select-Object Id, Name, State, HasMoreData | Format-Table -AutoSize -RepeatHeader
                 $failedJobs | ForEach-Object {
                     ($_ | Select-Object Id, Name, State, HasMoreData | Format-Table -AutoSize -HideTableHeaders)
-                    Write-Host (Receive-Job -Job $_) 
+                    Write-Host (Receive-Job -Job $_ -Keep) 
                 }
             }
             Write-Host All Jobs Finished
