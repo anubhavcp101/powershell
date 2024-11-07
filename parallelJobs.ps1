@@ -58,7 +58,10 @@ while ($true) {
                 Start-Transcript -Path "./failedJobs.txt" -Force
                 $failedJobs | ForEach-Object {
                     ($_ | Select-Object Id, Name, State, HasMoreData | Format-Table -AutoSize -HideTableHeaders)
-                    Write-Host (Receive-Job -Job $_ -Keep) 
+                    $errorDetails = (Receive-Job -Job $_ -Keep) 
+                    Write-Host $errorDetails
+                    # code to export a csv file containing failed job name and error details
+                    # and this is still pending 
                 }
                 Write-Host ($failedJobs | Measure-Object).Count jobs failed out of $Global:totalJobs jobs
                 Stop-Transcript
