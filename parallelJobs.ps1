@@ -9,18 +9,20 @@ $task = {
 
     Start-Sleep -Seconds 11
     Write-Error "This is an error to be printed"
+    Get-Item "C:\NonExistentFile1.txt" -ErrorAction Stop -ErrorVariable $Global:jobErrors
     Write-Host "Finished Job for" $vm.Name
 }
 #
 $Global:jobs = @()
 $Global:jobCounter = 0
 $Global:totalJobs = 0
+$Global:jobErrors = @()
 
 $Global:totalJobs = ($vms | Measure-Object).Count
 $vms | ForEach-Object {
     if ( $jobCounter -lt $maxJobCount) {
         Write-Host Starting Job of $_.Name
-        $job = Start-Job -Name $_.Name -ScriptBlock $task -ArgumentList $_
+        $job = Start-Job -Name $_.Name -ScriptBlock $task -ArgumentList $_ 
         $Global:jobs += $job
         $Global:jobCounter++
     } 
@@ -50,6 +52,10 @@ while ($true) {
             if (($failedJobs | Measure-Object).Count -gt 0) {
                 Write-Host Following Jobs Failed. Please Check
                 $failedJobs | Select-Object Id, Name, State, HasMoreData | Format-Table -AutoSize -RepeatHeader
+                $failedJobs | ForEach-Object {
+                    ($_ | Select-Object Id, Name, State, HasMoreData | Format-Table -AutoSize -HideTableHeaders)
+                    Write-Host (Receive-Job -Job $_) 
+                }
             }
             Write-Host All Jobs Finished
             break
