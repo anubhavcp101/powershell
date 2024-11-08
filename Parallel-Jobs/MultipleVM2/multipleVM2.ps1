@@ -1,6 +1,6 @@
 #
 $maxJobCount = 11
-$vms = Import-Csv -Path "./vms.csv" -Header "Name"
+$vms = Import-Csv -Path "./vms.csv" #-Header "Name"
 $task = {
     param(
         $vm
