@@ -11,7 +11,7 @@ $mVm = $vms | Where-Object {$_.Name -in $vmNames}
 $mVm | ForEach-Object {
   Write-Host $_.Name : $_.Id
   #
-  
+  Invoke-AzVMRunCommand -ResourceGroupName "" -VMName "" -CommandId "RunPowerShellScript" -ScriptPath ''
   Stop-AzVM -Id $_.Id
 }
 Stop-Transcript
