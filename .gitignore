@@ -1,3 +1,5 @@
 failedJobs.*
 listOfFailedJobs.csv
 vms.csv
+failedJobErrors.txt
+failedJob*

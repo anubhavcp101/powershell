@@ -1,27 +1,32 @@
 #
 $maxJobCount = 11
-$vms = Import-Csv -Path "./vms.csv" #-Header "Name"
+$vms = Import-Csv -Path "./vms.csv" -Header "Name"
 $task = {
     param(
         $vm
     )
-    #
     Write-Host "Starting Job for" $vm.Name  
-    $vmname = $vm.Name.trim()
-    $resId = (Search-AzGraph -Query ("resources | where type == ""microsoft.compute/virtualmachines"" | where name like """ + $vmname + """ | project id") -UseTenantScope).id; write $resId;
-    $subsId = (Search-AzGraph -Query ("resources | where type == ""microsoft.compute/virtualmachines"" | where name like """ + $vmname + """ | project subscriptionId") -UseTenantScope).subscriptionId; write $subsId;
-    $currentSubscriptionId = (Get-AzContext).Subscription.Id.ToString()
-    #
-    if ($currentSubscriptionId -ne $subsId) { Set-AzContext -SubscriptionId $subsId -ErrorAction Stop }
-    if ($resId) {
-        $AzVm = Get-AzVM -ResourceId $resId
-        Invoke-AzVMRunCommand -ResourceGroupName $AzVm.ResourceGroupName -VMName $AzVm.Name -CommandId "RunPowerShellScript" -ScriptPath './script.ps1' 
-    } else {
-        Write-Error $vmname Not found
-    }
-    
-}
 
+    $curSubs = (Get-AzContext).Subscription.Id.ToString()
+    if ( $vm.SUBSCRIPTIONID -ne $curSubs) { Set-AzContext -SubscriptionId $vm.SUBSCRIPTIONID -ErrorAction Stop }
+    $AzVm = Get-AzVM -ResourceGroupName $vm.RESOURCEGROUP -Name $vm.NAME -ErrorAction Stop 
+    $vmSize = $AzVm.HardwareProfile.VmSize
+    #
+    if ($vm.CURRENTSIZE -eq $vmSize ) {
+        $AzVm.HardwareProfile.VmSize = $vm.REQUESTEDSIZE
+        Write-Host "Stopping VM: " $AzVm.Name " and its expected size is " ($AzVm.HardwareProfile.VmSize)
+        Stop-AzVM -Id $AzVm.Id -Force -ErrorAction Stop
+        #
+        Write-Host "Updating the VM: " $AzVm.Name " to " ($AzVm.HardwareProfile.VmSize)
+        Update-AzVM -ResourceGroupName $AzVm.ResourceGroupName -VM $AzVm -ErrorAction Stop
+        Write-Host " Starting the VM: " $vm.Name
+        Start-AzVM -Id $vm.Id -NoWait
+    }
+    else {
+        Write-Host The VM $AzVm.Name "size in the csv file and azure portal doesn't match"
+    }
+}
+#
 $Global:jobs = @()
 $Global:jobCounter = 0
 $Global:totalJobs = 0
@@ -58,13 +63,6 @@ while ($true) {
             Start-Sleep -Seconds 30
         }
         else {
-            Start-Transcript -Path "./allJobs.txt" -Force
-            $Global:jobs | ForEach-Object {
-                    ($_ | Select-Object Id, Name, State, HasMoreData | Format-Table -AutoSize -HideTableHeaders)
-                $jobDetails = (Receive-Job -Job $_ -Keep) 
-                Write-Host $jobDetails
-            }
-            Stop-Transcript
             $failedJobs = $Global:jobs | where State -EQ "Failed" | where HasMoreData -EQ $true
             if (($failedJobs | Measure-Object).Count -gt 0) {
                 Write-Host Following Jobs Failed. Please Check

@@ -7,4 +7,5 @@
 
 
 ### Output
+
 It will the run the script in the given list of the VMs and output a alljobs.txt which is basically transcript of the Invoke-AzVMRunCommand output

@@ -1,27 +1,33 @@
 #
 $maxJobCount = 11
-$vms = Import-Csv -Path "./vms.csv" #-Header "Name"
+$vms = Import-Csv -Path "./vms.csv" -Header "Name"
 $task = {
     param(
         $vm
     )
-    #
     Write-Host "Starting Job for" $vm.Name  
+
     $vmname = $vm.Name.trim()
     $resId = (Search-AzGraph -Query ("resources | where type == ""microsoft.compute/virtualmachines"" | where name like """ + $vmname + """ | project id") -UseTenantScope).id; write $resId;
     $subsId = (Search-AzGraph -Query ("resources | where type == ""microsoft.compute/virtualmachines"" | where name like """ + $vmname + """ | project subscriptionId") -UseTenantScope).subscriptionId; write $subsId;
-    $currentSubscriptionId = (Get-AzContext).Subscription.Id.ToString()
+    Set-AzContext -SubscriptionId $subsId -ErrorAction Stop
     #
-    if ($currentSubscriptionId -ne $subsId) { Set-AzContext -SubscriptionId $subsId -ErrorAction Stop }
     if ($resId) {
         $AzVm = Get-AzVM -ResourceId $resId
-        Invoke-AzVMRunCommand -ResourceGroupName $AzVm.ResourceGroupName -VMName $AzVm.Name -CommandId "RunPowerShellScript" -ScriptPath './script.ps1' 
+        $dcr = Get-AzDataCollectionRule | where Name -Like $vm.dcrName
+        if ($dcr) {
+            New-AzDataCollectionRuleAssociation -AssociationName ($dcr.Name + "-association") -DataCollectionRuleId $dcr.Id -ResourceUri $AzVm.Id -ErrorAction Stop
+            Write-Host Asssociate $AzVm.Name with $dcr.Name
+        }
+        else {
+            Write-Error The DCR $vm.dcrName is not found
+        }
     } else {
-        Write-Error $vmname Not found
+        Write-Error The VM $vm.Name is not found
     }
     
 }
-
+#
 $Global:jobs = @()
 $Global:jobCounter = 0
 $Global:totalJobs = 0
@@ -58,13 +64,6 @@ while ($true) {
             Start-Sleep -Seconds 30
         }
         else {
-            Start-Transcript -Path "./allJobs.txt" -Force
-            $Global:jobs | ForEach-Object {
-                    ($_ | Select-Object Id, Name, State, HasMoreData | Format-Table -AutoSize -HideTableHeaders)
-                $jobDetails = (Receive-Job -Job $_ -Keep) 
-                Write-Host $jobDetails
-            }
-            Stop-Transcript
             $failedJobs = $Global:jobs | where State -EQ "Failed" | where HasMoreData -EQ $true
             if (($failedJobs | Measure-Object).Count -gt 0) {
                 Write-Host Following Jobs Failed. Please Check
@@ -76,6 +75,8 @@ while ($true) {
                     ($_ | Select-Object Id, Name, State, HasMoreData | Format-Table -AutoSize -HideTableHeaders)
                     $errorDetails = (Receive-Job -Job $_ -Keep) 
                     Write-Host $errorDetails
+                    # code to export a csv file containing failed job name and error details
+                    # and this is still pending 
                 }
                 Write-Host ($failedJobs | Measure-Object).Count jobs failed out of $Global:totalJobs jobs
                 Stop-Transcript
