@@ -55,16 +55,17 @@ while ($true) {
                 Write-Host ($failedJobs | Measure-Object).Count jobs failed out of $Global:totalJobs jobs
                 $failedJobs | Select-Object Id, Name, State, HasMoreData | Format-Table -AutoSize -RepeatHeader
                 $failedJobs | Select-Object Id, Name, State | Export-Csv -Path "./listOfFailedJobs.csv" -NoTypeInformation -Force
-                Start-Transcript -Path "./failedJobs.txt" -Force
+                # Start-Transcript -Path "./failedJobs.txt" -Force
+                "jobName,Error" | Out-File -FilePath "./failedJobError.csv" -Force
                 $failedJobs | ForEach-Object {
                     ($_ | Select-Object Id, Name, State, HasMoreData | Format-Table -AutoSize -HideTableHeaders)
-                    $errorDetails = (Receive-Job -Job $_ -Keep) 
+                    # $errorDetails = (Receive-Job -Job $_ -Keep) 
+                    $errorDetails = $_.ChildJobs.JobStateInfo.Reason -join ";"
                     Write-Host $errorDetails
-                    # code to export a csv file containing failed job name and error details
-                    # and this is still pending 
+                    $_.Name+","+$errorDetails | Out-File -FilePath "./failedJobError.csv" -Append -Force 
                 }
                 Write-Host ($failedJobs | Measure-Object).Count jobs failed out of $Global:totalJobs jobs
-                Stop-Transcript
+                # Stop-Transcript
             }
             Write-Host All Jobs Finished
             Write-Host ($failedJobs | Measure-Object).Count jobs failed out of $Global:totalJobs jobs
