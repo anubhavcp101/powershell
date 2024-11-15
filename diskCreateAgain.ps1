@@ -22,25 +22,30 @@ function diskCreate {
         return
     }
 
+    # Determine the zone of the VM, if any
+    $vmZone = if ($vm.Zones -join "") { $vm.Zones -join "" } else { $null }  # If the VM has a zone, it will be listed here
+
+
     # Check for Disk Encryption Set and assign it if present
     if ($toCopyDisk.DiskEncryptionSet) {
         $diskEncryptionSetId = $toCopyDisk.DiskEncryptionSet.Id
+        $newDiskConfig = New-AzDiskConfig -Location $toCopyDisk.Location `
+        -SkuName $toCopyDisk.Sku.Name `
+        -CreateOption Empty `
+        -OsType $toCopyDisk.OsType `
+        -DiskSizeGB $newSizeGB `
+        -DiskEncryptionSetId $diskEncryptionSetId `
+        -Zone $vmZone `
+        -Tag $oldTags
     } else {
-        $diskEncryptionSetId = $null
+        $newDiskConfig = New-AzDiskConfig -Location $toCopyDisk.Location `
+        -SkuName $toCopyDisk.Sku.Name `
+        -CreateOption Empty `
+        -OsType $toCopyDisk.OsType `
+        -DiskSizeGB $newSizeGB `
+        -Zone $vmZone `
+        -Tag $oldTags
     }
-
-    # Determine the zone of the VM, if any
-    $vmZone = $vm.Zones -join ""  # If the VM has a zone, it will be listed here
-
-    # Prepare the new disk configuration, including zone and DES if applicable
-    $newDiskConfig = New-AzDiskConfig -Location $toCopyDisk.Location `
-    -SkuName $toCopyDisk.Sku.Name `
-    -CreateOption Empty `
-    -OsType $toCopyDisk.OsType `
-    -DiskSizeGB $newSizeGB `
-    -DiskEncryptionSetId $diskEncryptionSetId `
-    -Zone $vmZone `
-    -Tag $oldTags
 
     # Create the new disk with a unique name as per naming convention
     $nameNumber = 2
@@ -52,7 +57,7 @@ function diskCreate {
 
     try {
         $newDisk = New-AzDisk -ResourceGroupName $vm.ResourceGroupName -DiskName $newDiskName -Disk $newDiskConfig
-        Write-Output "New disk '$newDiskName' created successfully in zone $vmZone."
+        Write-Output "New disk '$newDiskName' created successfully"
     } catch {
         Write-Output "Failed to create new disk: $_"
         return
@@ -76,8 +81,8 @@ function diskCreate {
         -Caching $oldHostCaching
 
         # Update the VM with the new disk configuration
-        Update-AzVM -VM $vm -ResourceGroupName $resourceGroupName
-        Write-Output "New disk attached successfully to VM '$vmName' at new LUN $newLun in zone $vmZone."
+        # Update-AzVM -VM $vm -ResourceGroupName $resourceGroupName #-- need to check this
+        Write-Output "New disk attached successfully to VM '$vmName' at new LUN $newLun "
     } catch {
         Write-Output "Failed to attach new disk to VM: $_"
     }
