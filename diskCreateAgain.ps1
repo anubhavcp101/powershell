@@ -5,7 +5,8 @@ function diskCreate {
         [int]$lun,
         [int]$newSizeGB
     )
-
+    #
+    $ErrorActionPreference = 'Stop'
     # Get the VM and its attached disks
     $vm = Get-AzVM -ResourceGroupName $resourceGroupName -Name $vmName
     $allDataDisks = $vm.StorageProfile.DataDisks
@@ -19,14 +20,18 @@ function diskCreate {
         $oldTags = $toCopyDisk.Tags
     } else {
         Write-Error "Disk with LUN $lun not found for VM '$vmName'."
+        Write-Error "Disk with LUN $lun not found for VM '$vmName'." | Out-File -FilePath (".\$vmName.txt") -Append -Force
         return
     }
 
     # Determine the zone of the VM, if any
     $vmZone = if ($vm.Zones -join "") { $vm.Zones -join "" } else { $null }  # If the VM has a zone, it will be listed here
+    if ($vm.Zones -join "") {
+        Write-Host $vmName : This VM has Zones
+        Write-Host $vmName : This VM has Zones | Out-File -FilePath (".\$vmName.txt") -Append -Force
+    }
 
 
-    # Check for Disk Encryption Set and assign it if present
     if ($toCopyDisk.DiskEncryptionSet) {
         $diskEncryptionSetId = $toCopyDisk.DiskEncryptionSet.Id
         $newDiskConfig = New-AzDiskConfig -Location $toCopyDisk.Location `
@@ -47,7 +52,6 @@ function diskCreate {
         -Tag $oldTags
     }
 
-    # Create the new disk with a unique name as per naming convention
     $nameNumber = 2
     $newDiskName = ("DataDisk0"+$nameNumber+"-"+$vmName)
     while ($allDataDisks.Name -contains $newDiskName) {
@@ -58,8 +62,10 @@ function diskCreate {
     try {
         $newDisk = New-AzDisk -ResourceGroupName $vm.ResourceGroupName -DiskName $newDiskName -Disk $newDiskConfig
         Write-Output "New disk '$newDiskName' created successfully"
+        Write-Output "New disk '$newDiskName' created successfully" | Out-File -FilePath (".\$vmName.txt") -Append -Force
     } catch {
-        Write-Output "Failed to create new disk: $_"
+        Write-Output " $vmName : Failed to create new disk: $_"
+        Write-Output " $vmName : Failed to create new disk: $_" | Out-File -FilePath (".\$vmName.txt") -Append -Force
         return
     }
 
@@ -83,8 +89,10 @@ function diskCreate {
         # Update the VM with the new disk configuration
         # Update-AzVM -VM $vm -ResourceGroupName $resourceGroupName #-- need to check this
         Write-Output "New disk attached successfully to VM '$vmName' at new LUN $newLun "
+        Write-Output "New disk attached successfully to VM '$vmName' at new LUN $newLun " | Out-File -FilePath (".\$vmName.txt") -Append -Force
     } catch {
-        Write-Output "Failed to attach new disk to VM: $_"
+        Write-Output " $vmName : Failed to attach new disk to VM: $_"
+        Write-Output " $vmName : Failed to attach new disk to VM: $_" | Out-File -FilePath (".\$vmName.txt") -Append -Force 
     }
 }
 
