@@ -50,3 +50,5 @@ recoveryservicesresources
 | extend vmNicsDetails = properties.providerSpecificDetails.vmNics[0].ipConfigs[0]
 | project VM = properties.friendlyName,ReplicationHealth = properties.replicationHealth,vault = split(id,"/")[-7], FailoverIP = vmNicsDetails.recoveryStaticIPAddress,FailoverIPType = vmNicsDetails.recoveryIPAddressType, PrimaryIP = vmNicsDetails.staticIPAddress, PrimarySubnet = vmNicsDetails.subnetName, FailoverSubnet = vmNicsDetails.recoverySubnetName, Policy = properties.policyFriendlyName, ActiveLocation = properties.activeLocation, Errors = properties.healthErrors
 
+// --------------------------------
+
