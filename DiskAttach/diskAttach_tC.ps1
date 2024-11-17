@@ -154,7 +154,7 @@ $templateParameters = @{
 
 New-AzResourceGroupDeployment `
     -ResourceGroupName $resourceGroupName `
-    -TemplateObject ($template | ConvertFrom-Json) `
+    -TemplateObject ($template | ConvertFrom-Json -AsHashtable) `
     -TemplateParameterObject $templateParameters
 
 if ($?) {
