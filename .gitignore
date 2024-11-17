@@ -3,3 +3,4 @@ listOfFailedJobs.csv
 vms.csv
 failedJobErrors.txt
 failedJob*
+schematest.ps1
