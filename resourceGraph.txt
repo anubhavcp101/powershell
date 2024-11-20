@@ -50,5 +50,12 @@ recoveryservicesresources
 | extend vmNicsDetails = properties.providerSpecificDetails.vmNics[0].ipConfigs[0]
 | project VM = properties.friendlyName,ReplicationHealth = properties.replicationHealth,vault = split(id,"/")[-7], FailoverIP = vmNicsDetails.recoveryStaticIPAddress,FailoverIPType = vmNicsDetails.recoveryIPAddressType, PrimaryIP = vmNicsDetails.staticIPAddress, PrimarySubnet = vmNicsDetails.subnetName, FailoverSubnet = vmNicsDetails.recoverySubnetName, Policy = properties.policyFriendlyName, ActiveLocation = properties.activeLocation, Errors = properties.healthErrors
 
+// To get Protect Disks and their Cache Storage Account
+recoveryservicesresources
+| where type == "microsoft.recoveryservices/vaults/replicationfabrics/replicationprotectioncontainers/replicationprotecteditems"
+| project vm = properties.friendlyName, replicatedDisks = properties.providerSpecificDetails.protectedManagedDisks
+| mv-expand replicatedDisks
+| project vm, PrimaryDiskId = replicatedDisks.diskId, PrimaryDiskName = replicatedDisks.diskName, CacheStorageAccount = split(replicatedDisks.primaryStagingAzureStorageAccountId,"/")[-1]
+
 // --------------------------------
 
