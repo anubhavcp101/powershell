@@ -57,5 +57,17 @@ recoveryservicesresources
 | mv-expand replicatedDisks
 | project vm, PrimaryDiskId = replicatedDisks.diskId, PrimaryDiskName = replicatedDisks.diskName, CacheStorageAccount = split(replicatedDisks.primaryStagingAzureStorageAccountId,"/")[-1]
 
+// To get ASG and list of Nics associated with them
+resources
+| where type == "microsoft.network/networkinterfaces"
+| project name, ip = properties.ipConfigurations[0].properties.privateIPAddress, properties
+| extend Asg = (properties.ipConfigurations[0].properties.applicationSecurityGroups)
+| where isnotempty( Asg)
+| mv-expand Asg
+| project name, ip, AsgName = tostring(split(Asg.id, "/")[-1])
+| summarize NicList = tostring(make_list(name)) by AsgName
+| project AsgName, substring(NicList,1,(strlen(NicList)-2))
+
+
 // --------------------------------
 
