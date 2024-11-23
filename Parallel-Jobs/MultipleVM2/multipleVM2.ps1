@@ -15,7 +15,7 @@ $task = {
     if ($currentSubscriptionId -ne $subsId) { Set-AzContext -SubscriptionId $subsId -ErrorAction Stop }
     if ($resId) {
         $AzVm = Get-AzVM -ResourceId $resId
-        Invoke-AzVMRunCommand -ResourceGroupName $AzVm.ResourceGroupName -VMName $AzVm.Name -CommandId "RunPowerShellScript" -ScriptPath './script.ps1' 
+        Invoke-AzVMRunCommand -ResourceGroupName $AzVm.ResourceGroupName -VMName $AzVm.Name -CommandId "RunPowerShellScript" -ScriptPath ("`'$PSScriptRoot\script.ps1`'") 
     } else {
         Write-Error $vmname Not found
     }

@@ -32,8 +32,8 @@ function diskCreate {
     }
 
 
-    if ($toCopyDisk.DiskEncryptionSet) {
-        $diskEncryptionSetId = $toCopyDisk.DiskEncryptionSet.Id
+    if ($toCopyDisk.Encryption.DiskEncryptionSetId) {
+        $diskEncryptionSetId = $toCopyDisk.Encryption.DiskEncryptionSetId
         $newDiskConfig = New-AzDiskConfig -Location $toCopyDisk.Location `
         -SkuName $toCopyDisk.Sku.Name `
         -CreateOption Empty `
