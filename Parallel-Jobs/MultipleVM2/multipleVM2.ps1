@@ -13,7 +13,8 @@ $task = {
     $currentSubscriptionId = (Get-AzContext).Subscription.Id.ToString()
     #
     if ($currentSubscriptionId -ne $subsId) { Set-AzContext -SubscriptionId $subsId -ErrorAction Stop }
-    if ($resId) {
+    $resIdCount = ($resId | Measure-Object).Count 
+    if ($resIdCount -gt 0 -and $resIdCount -lt 2) {
         $AzVm = Get-AzVM -ResourceId $resId
         Invoke-AzVMRunCommand -ResourceGroupName $AzVm.ResourceGroupName -VMName $AzVm.Name -CommandId "RunPowerShellScript" -ScriptPath ("`'$PSScriptRoot\script.ps1`'") 
     } else {

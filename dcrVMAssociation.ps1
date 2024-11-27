@@ -10,6 +10,8 @@ $vmList | ForEach-Object {
   $vm = Get-AzVM -ResourceId $resId
   $dcr = Get-AzDataCollectionRule | where Name -Like $dcrName
   if ($dcr) {
+    #
+    # Don't forget about AMA vm extension, system-assigned managed identity and then DCR Association
     New-AzDataCollectionRuleAssociation -AssociationName ($dcr.Name + "-association") -DataCollectionRuleId $dcr.Id -ResourceUri $vm.Id
   }
 }
