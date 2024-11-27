@@ -1,4 +1,4 @@
-// To get recovery service resources like vault, fabbic, protectionContainer, etc
+// To get recovery service resources like vault, fabric, protectionContainer, etc
 recoveryservicesresources
 | where type == "microsoft.recoveryservices/vaults/replicationfabrics/replicationprotectioncontainers/replicationprotecteditems"
 | project properties.friendlyName, vault = split(id,"/")[-7], fabric = split(id,"/")[-5], container = split(id,"/")[-3], id
@@ -49,5 +49,33 @@ recoveryservicesresources
 | where type == "microsoft.recoveryservices/vaults/replicationfabrics/replicationprotectioncontainers/replicationprotecteditems"
 | extend vmNicsDetails = properties.providerSpecificDetails.vmNics[0].ipConfigs[0]
 | project VM = properties.friendlyName,ReplicationHealth = properties.replicationHealth,vault = split(id,"/")[-7], FailoverIP = vmNicsDetails.recoveryStaticIPAddress,FailoverIPType = vmNicsDetails.recoveryIPAddressType, PrimaryIP = vmNicsDetails.staticIPAddress, PrimarySubnet = vmNicsDetails.subnetName, FailoverSubnet = vmNicsDetails.recoverySubnetName, Policy = properties.policyFriendlyName, ActiveLocation = properties.activeLocation, Errors = properties.healthErrors
+
+// To get Protected Disks and their Cache Storage Account
+recoveryservicesresources
+| where type == "microsoft.recoveryservices/vaults/replicationfabrics/replicationprotectioncontainers/replicationprotecteditems"
+| project vm = properties.friendlyName, replicatedDisks = properties.providerSpecificDetails.protectedManagedDisks
+| mv-expand replicatedDisks
+| project vm, PrimaryDiskId = replicatedDisks.diskId, PrimaryDiskName = replicatedDisks.diskName, CacheStorageAccount = split(replicatedDisks.primaryStagingAzureStorageAccountId,"/")[-1]
+
+// To get ASG and list of Nics associated with them
+resources
+| where type == "microsoft.network/networkinterfaces"
+| project name, ip = properties.ipConfigurations[0].properties.privateIPAddress, properties
+| extend Asg = (properties.ipConfigurations[0].properties.applicationSecurityGroups)
+| where isnotempty( Asg)
+| mv-expand Asg
+| project name, ip, AsgName = tostring(split(Asg.id, "/")[-1])
+| summarize NicList = tostring(make_list(name)) by AsgName
+| project AsgName, substring(NicList,1,(strlen(NicList)-2))
+
+// To get VM which don't have AMA extension
+resources
+| where type == "microsoft.compute/virtualmachines"
+| project name, rId = tolower(tostring(id))
+| join kind=fullouter ( resources
+| where type == "microsoft.compute/virtualmachines/extensions"
+| where name == "AzureMonitorWindowsAgent" or name == "AzureMonitorLinuxAgent"
+| project vmid = tolower(strcat_array(array_slice(split(id,"/"),0,-3),"/")) ) on $left.rId == $right.vmid
+| where isempty(vmid)
 
 // --------------------------------

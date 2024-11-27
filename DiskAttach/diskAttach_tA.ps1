@@ -97,4 +97,4 @@ function diskCreate {
 }
 
 diskCreate -vmName "myVM" -resourceGroupName "myResourceGroup" -lun 2 -newSizeGB 32
-
+# Write-Host "$PSScriptRoot\asd.txt"

@@ -143,7 +143,9 @@ function diskCreate {
   }
 }
 '@
-
+$templateHash =@{}
+$templateJson = $template | ConvertFrom-Json
+$templateJson.psobject.properties | ForEach-Object { $templateHash[$_.Name] = $_.value }
 
 $templateParameters = @{
     "vmName"      = $vmName
