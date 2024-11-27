@@ -68,6 +68,15 @@ resources
 | summarize NicList = tostring(make_list(name)) by AsgName
 | project AsgName, substring(NicList,1,(strlen(NicList)-2))
 
+// To get VM which don't have AMA extension
+resources
+| where type == "microsoft.compute/virtualmachines"
+| project name, rId = tolower(tostring(id))
+| join kind=fullouter ( resources
+| where type == "microsoft.compute/virtualmachines/extensions"
+| where name == "AzureMonitorWindowsAgent" or name == "AzureMonitorLinuxAgent"
+| project vmid = tolower(strcat_array(array_slice(split(id,"/"),0,-3),"/")) ) on $left.rId == $right.vmid
+| where isempty(vmid)
 
 // --------------------------------
 
