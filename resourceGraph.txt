@@ -78,5 +78,10 @@ resources
 | project vmid = tolower(strcat_array(array_slice(split(id,"/"),0,-3),"/")) ) on $left.rId == $right.vmid
 | where isempty(vmid)
 
+// To get maintenance configuration and VMs assigned to it 
+maintenanceresources
+| where type == "microsoft.maintenance/configurationassignments"
+| project mcmaintenanceConfiguration = tostring(split(properties.maintenanceConfigurationId,"/")[-1]), vm = tostring(split(properties.resourceId, "/")[-1])
+
 // --------------------------------
 
