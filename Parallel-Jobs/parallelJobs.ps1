@@ -3,13 +3,15 @@ $maxJobCount = 11
 $vms = Import-Csv -Path "./vms.csv" -Header "Name"
 $task = {
     param(
-        $vm
-    )
-    Write-Host "Starting Job for" $vm.Name  
+        $vm,
+        $wrkdir)
+        #
+    Write-Host "Starting Job for" $vm.Name 
+    Set-Location $wrkdir 
 
     Start-Sleep -Seconds 11
     Write-Error "This is an error to be printed"
-    Get-Item "C:\NonExistentFile1.txt" -ErrorAction Stop
+    Get-Item "C:\NonExistentFile2.txt" -ErrorAction Stop
     Write-Host "Finished Job for" $vm.Name
 }
 #
@@ -18,12 +20,14 @@ $Global:jobCounter = 0
 $Global:totalJobs = 0
 $Global:jobErrors = ""
 $Global:errorFile = @()
+$wrkdir = $PSScriptRoot
+
 
 $Global:totalJobs = ($vms | Measure-Object).Count
 $vms | ForEach-Object {
     if ( $jobCounter -lt $maxJobCount) {
         Write-Host Starting Job of $_.Name
-        $job = Start-Job -Name $_.Name -ScriptBlock $task -ArgumentList $_
+        $job = Start-Job -Name $_.Name -ScriptBlock $task -ArgumentList $_, $wrkdir
         $Global:jobs += $job
         $Global:jobCounter++
     } 
@@ -34,7 +38,7 @@ while ($true) {
     #Write-Host Current Job is #$currentlyRunningJobs
     if ((($currentlyRunningJobs | Measure-Object).Count -lt $maxJobCount) -and (($jobCounter) -lt $Global:totalJobs)) {
         Write-Host Starting Job of $vms[$Global:jobCounter].Name
-        $job = Start-Job -Name $vms[$Global:jobCounter].Name -ScriptBlock $task -ArgumentList $vms[$Global:jobCounter] 
+        $job = Start-Job -Name $vms[$Global:jobCounter].Name -ScriptBlock $task -ArgumentList $vms[$Global:jobCounter], $wrkdir 
         $Global:jobs += $job
         $Global:jobCounter++
     }

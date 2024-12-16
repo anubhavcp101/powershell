@@ -3,10 +3,12 @@ $maxJobCount = 11
 $vms = Import-Csv -Path "./vms.csv" #-Header "Name"
 $task = {
     param(
-        $vm
+        $vm,
+        $wrkdir
     )
     #
     Write-Host "Starting Job for" $vm.Name  
+    Set-Location $wrkdir
     $vmname = $vm.Name.trim()
     $resId = (Search-AzGraph -Query ("resources | where type == ""microsoft.compute/virtualmachines"" | where name like """ + $vmname + """ | project id") -UseTenantScope).id; write $resId;
     $subsId = (Search-AzGraph -Query ("resources | where type == ""microsoft.compute/virtualmachines"" | where name like """ + $vmname + """ | project subscriptionId") -UseTenantScope).subscriptionId; write $subsId;
@@ -28,12 +30,13 @@ $Global:jobCounter = 0
 $Global:totalJobs = 0
 $Global:jobErrors = ""
 $Global:errorFile = @()
+$wrkdir = $PSScriptRoot
 
 $Global:totalJobs = ($vms | Measure-Object).Count
 $vms | ForEach-Object {
     if ( $jobCounter -lt $maxJobCount) {
         Write-Host Starting Job of $_.Name
-        $job = Start-Job -Name $_.Name -ScriptBlock $task -ArgumentList $_
+        $job = Start-Job -Name $_.Name -ScriptBlock $task -ArgumentList $_, $wrkdir
         $Global:jobs += $job
         $Global:jobCounter++
     } 
@@ -44,7 +47,7 @@ while ($true) {
     #Write-Host Current Job is #$currentlyRunningJobs
     if ((($currentlyRunningJobs | Measure-Object).Count -lt $maxJobCount) -and (($jobCounter) -lt $Global:totalJobs)) {
         Write-Host Starting Job of $vms[$Global:jobCounter].Name
-        $job = Start-Job -Name $vms[$Global:jobCounter].Name -ScriptBlock $task -ArgumentList $vms[$Global:jobCounter]  
+        $job = Start-Job -Name $vms[$Global:jobCounter].Name -ScriptBlock $task -ArgumentList $vms[$Global:jobCounter], $wrkdir  
         $Global:jobs += $job
         $Global:jobCounter++
     }
