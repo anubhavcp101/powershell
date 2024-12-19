@@ -6,7 +6,7 @@ $amaExt = {
     param(
         $vmExt
     )
-    Set-AzContext -SubscriptionId ($vmExt.RequestId -split("/"))[2]
+    Set-AzContext -SubscriptionId ($vmExt.Id -split("/"))[2]
     Set-AzVMExtension -Name AzureMonitorWindowsAgent -ExtensionType AzureMonitorWindowsAgent -Publisher Microsoft.Azure.Monitor -ResourceGroupName $vmExt.ResourceGroupName -VMName $vmExt.Name -Location $vmExt.Location -TypeHandlerVersion "1.0" -EnableAutomaticUpgrade $true
 }
 
@@ -15,7 +15,7 @@ $dcrAssociation = {
         $vmDcr
     )
     $dcrName = ""
-    Set-AzContext -SubscriptionId ($vmDcr.RequestId -split("/"))[2]
+    Set-AzContext -SubscriptionId ($vmDcr.Id -split("/"))[2]
     $dcr = Get-AzDataCollectionRule | where Name -Like $dcrName
     if ($dcr) {
         New-AzDataCollectionRuleAssociation -AssociationName ($dcr.Name + "-association") -DataCollectionRuleId $dcr.Id -ResourceUri $vmDcr.Id
@@ -26,8 +26,8 @@ $patchMode = {
     param(
         $vmPatMode
     )
-    Set-AzContext -SubscriptionId ($vmPatMode.RequestId -split("/"))[2]
-    $vmPatMode.OSProfile.WindowsConfiguration.PatchSettings.AssessmentMode = "AutomaticByPlatform"
+    Set-AzContext -SubscriptionId ($vmPatMode.Id -split("/"))[2]
+    $vmPatMode.OSProfile.WindowsConfiguration.PatchSettings.patchMode = "AutomaticByPlatform"
     $vmPatMode.OSProfile.WindowsConfiguration.PatchSettings.AutomaticByPlatformSettings = @{"bypassPlatformSafetyChecksOnUserSchedule" = $true}
     Update-AzVM -ResourceGroupName $vmPatMode.ResourceGroupName -VM $vmPatMode
 }
