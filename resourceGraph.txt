@@ -83,5 +83,13 @@ maintenanceresources
 | where type == "microsoft.maintenance/configurationassignments"
 | project mcmaintenanceConfiguration = tostring(split(properties.maintenanceConfigurationId,"/")[-1]), vm = tostring(split(properties.resourceId, "/")[-1])
 
+// To get FQDN and IPAddresses of Private Endpoints
+resources
+| where type == "microsoft.network/privateendpoints"
+| where properties.customDnsConfigs != "[]"
+| project name, DnsConfigs = properties.customDnsConfigs
+| mv-expand DnsConfigs
+| project name, FQDN = DnsConfigs.fqdn, IpAddress = DnsConfigs.ipAddresses[0]
+
 // --------------------------------
 
