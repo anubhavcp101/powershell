@@ -2,12 +2,16 @@ param(
     $vmName
 )
 
-$amaExt = {
+$amaWindwowsExt = {
     param(
-        $vmExt
+        $resId
+        #$vmExt
     )
-    Set-AzContext -SubscriptionId ($vmExt.Id -split("/"))[2]
-    Set-AzVMExtension -Name AzureMonitorWindowsAgent -ExtensionType AzureMonitorWindowsAgent -Publisher Microsoft.Azure.Monitor -ResourceGroupName $vmExt.ResourceGroupName -VMName $vmExt.Name -Location $vmExt.Location -TypeHandlerVersion "1.0" -EnableAutomaticUpgrade $true
+    Set-AzContext -SubscriptionId ($resId -split("/"))[2]
+    #Set-AzContext -SubscriptionId ($vmExt.Id -split("/"))[2]
+    $vmAmaExt = Get-AzVM -ResourceId $resId
+    Set-AzVMExtension -Name AzureMonitorWindowsAgent -ExtensionType AzureMonitorWindowsAgent -Publisher Microsoft.Azure.Monitor -ResourceGroupName $vmAmaExt.ResourceGroupName -VMName $vmAmaExt.Name -Location $vmAmaExt.Location -TypeHandlerVersion "1.0" -EnableAutomaticUpgrade $true
+    #Set-AzVMExtension -Name AzureMonitorWindowsAgent -ExtensionType AzureMonitorWindowsAgent -Publisher Microsoft.Azure.Monitor -ResourceGroupName $vmExt.ResourceGroupName -VMName $vmExt.Name -Location $vmExt.Location -TypeHandlerVersion "1.0" -EnableAutomaticUpgrade $true
 }
 
 $dcrAssociation = {
@@ -42,6 +46,25 @@ $sysIdentity = {
     Update-AzVM -ResourceGroupName $vmSysIdentity.ResourceGroupName -VM $vmSysIdentity -IdentityType SystemAssigned
 }
 
+$bootDiag = {
+    param(
+        $resId
+    )
+    Set-AzContext -SubscriptionId ($resId -split("/"))[2]
+    $vmBootDiag = Get-AzVM -ResourceId $resId
+    Set-AzVMBootDiagnostic -Enable -VM $vmBootDiag
+}
+
+$patchAssess = {
+    param(
+        $resId
+    )
+    Set-AzContext -SubscriptionId ($resId -split("/"))[2]
+    $vmPatchAssess = Get-AzVM -ResourceId $resId
+    Invoke-AzVMPatchAssessment -ResourceGroupName $vmPatchAssess.ResourceGroupName -VMName $vmPatchAssess.Name
+
+}
+
 $vmname = $vmName.trim()
 $resId = (Search-AzGraph -Query ("resources | where type == ""microsoft.compute/virtualmachines"" | where name like """ + $vmname + """ | project id") -UseTenantScope).id; write $resId;
 $subsId = (Search-AzGraph -Query ("resources | where type == ""microsoft.compute/virtualmachines"" | where name like """ + $vmname + """ | project subscriptionId") -UseTenantScope).subscriptionId; write $subsId;
@@ -51,10 +74,13 @@ if ($currentSubscriptionId -ne $subsId) { Set-AzContext -SubscriptionId $subsId 
 $resIdCount = ($resId | Measure-Object).Count 
 if ($resIdCount -gt 0 -and $resIdCount -lt 2) {
     $AzVm = Get-AzVM -ResourceId $resId
-    Start-Job -Name ($AzVm.Name + "-amaExtension") -ScriptBlock $amaExt -ArgumentList $AzVm
+    # Start-Job -Name ($AzVm.Name + "-amaExtension") -ScriptBlock $amaWindwowsExt -ArgumentList $AzVm
+    Start-Job -Name ($AzVm.Name + "-amaExtension") -ScriptBlock $amaWindwowsExt -ArgumentList $resId
     Start-Job -Name ($AzVm.Name + "-sysIdentity") -ScriptBlock $sysIdentity -ArgumentList $resId
     Start-Job -Name ($AzVm.Name + "-dcrAssociation") -ScriptBlock $dcrAssociation -ArgumentList $resId
     Start-Job -Name ($AzVm.Name + "-patchMode") -ScriptBlock $patchMode -ArgumentList $resId
+    Start-Job -Name ($AzVm.Name + "-bootDiag") -ScriptBlock $bootDiag -ArgumentList $resId
+    Start-Job -Name ($AzVm.Name + "-patchAssess") -ScriptBlock $patchAssess -ArgumentList $resId
     
 } else {
     Write-Error $vmname Not found

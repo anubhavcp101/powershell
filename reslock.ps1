@@ -1,5 +1,5 @@
 #
-Connect-AzAccount -TenantId "50c56ba2-8fca-42f4-8307-025e0d821d34"
+Connect-AzAccount -TenantId ""
 $subs = Get-AzSubscription
 $subs | ForEach-Object {
 Set-AzContext -Subscription $_.Name
