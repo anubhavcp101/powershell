@@ -65,6 +65,16 @@ $patchAssess = {
 
 }
 
+$azHybridBenefit = {
+    param(
+        $resId
+    )
+    Set-AzContext -SubscriptionId ($resId -split("/"))[2]
+    $vmHydBenefit = Get-AzVM -ResourceId $resId
+    $vmHydBenefit.LicenseType = "Windows_Server"
+    Update-AzVM -ResourceGroupName $vmHydBenefit.ResourceGroupName -VM $vmHydBenefit
+}
+
 $vmname = $vmName.trim()
 $resId = (Search-AzGraph -Query ("resources | where type == ""microsoft.compute/virtualmachines"" | where name like """ + $vmname + """ | project id") -UseTenantScope).id; write $resId;
 $subsId = (Search-AzGraph -Query ("resources | where type == ""microsoft.compute/virtualmachines"" | where name like """ + $vmname + """ | project subscriptionId") -UseTenantScope).subscriptionId; write $subsId;
@@ -81,6 +91,7 @@ if ($resIdCount -gt 0 -and $resIdCount -lt 2) {
     Start-Job -Name ($AzVm.Name + "-patchMode") -ScriptBlock $patchMode -ArgumentList $resId
     Start-Job -Name ($AzVm.Name + "-bootDiag") -ScriptBlock $bootDiag -ArgumentList $resId
     Start-Job -Name ($AzVm.Name + "-patchAssess") -ScriptBlock $patchAssess -ArgumentList $resId
+    Start-Job -Name ($AzVm.Name + "-azHybridBenefit") -ScriptBlock $azHybridBenefit -ArgumentList $resId
     
 } else {
     Write-Error $vmname Not found
