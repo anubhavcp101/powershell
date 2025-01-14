@@ -6,7 +6,8 @@ New-AzRecoveryServicesVault -Name $vaultName -ResourceGroupName $vaultRG -Locati
 $vault = Get-AzRecoveryServicesVault -Name $vaultName 
 #Set-AzRecoveryServicesBackupProperty  -Vault $vault -BackupStorageRedundancy LocallyRedundant
 #
-Set-AzRecoveryServicesVaultContext -Vault $vault
+Set-AzRecoveryServicesAsrVaultContext -Vault $vault
+#Set-AzRecoveryServicesVaultContext -Vault $vault
 $vaultId = $vault.ID
 $vaultSettingsFile = Get-AzRecoveryServicesVaultSettingsFile -Vault $vault -Path "." -SiteRecovery 
 $fileLocation = ((Get-ChildItem -Path ./*.VaultCredentials).PSpath -split("::"))[-1]
