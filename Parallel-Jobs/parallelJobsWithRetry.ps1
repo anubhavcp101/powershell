@@ -5,9 +5,11 @@ $attempt = 0
 $maxAttempt = 3
 $delay = 30
 $task = {
+    #
     param(
         $vm,
-        $wrkdir)
+        $wrkdir
+        )
     Write-Host "Starting Job for" $vm.Name 
     Set-Location $wrkdir 
 
