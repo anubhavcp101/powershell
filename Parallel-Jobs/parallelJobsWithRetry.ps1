@@ -1,6 +1,6 @@
 #
 $maxJobCount = 11
-$csvFilePath = "./vms.csv"
+$csvFilePath = "C:\Users\yashw\OneDrive\Desktop\powershell\powershell\vms.csv"
 $attempt = 0
 $maxAttempt = 3
 $delay = 30
@@ -19,19 +19,20 @@ $task = {
     Write-Host "Finished Job for" $vm.Name
 }
 
-while ($attempt -le $maxAttempt) {
+while ($attempt -lt $maxAttempt) {
     Set-Location $PSScriptRoot | Out-Null
     $vms = $null
     if ($attempt -eq 0) {
+        $attempt++
         $vms = Import-Csv -Path $csvFilePath #-Header "Name"
     }
     else {
         if (($Global:failedJobs | Measure-Object).Count -ge 0) {
             if ((Test-Path "./failedJobError.csv") -and (Get-Item "./failedJobError.csv").Length -ge 12) {
-                $attempt++
                 Write-Host Attempt $attempt with a delay of($delay * ($attempt)) Seconds
                 $vms = Import-Csv -Path "./failedJobError.csv" 
                 Start-Sleep -Seconds ($delay * ($attempt))
+                $attempt++
             }
             else {
                 break; break;
