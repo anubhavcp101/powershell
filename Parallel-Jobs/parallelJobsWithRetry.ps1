@@ -29,10 +29,17 @@ while ($attempt -le $maxAttempt) {
     else {
         if (($Global:failedJobs | Measure-Object).Count -ge 0) {
             if ((Test-Path "./failedJobError.csv") -and (Get-Item "./failedJobError.csv").Length -ge 12) {
-                Write-Host Attempt $attempt with a delay of($delay * ($attempt)) Seconds
-                $vms = Import-Csv -Path "./failedJobError.csv" 
-                Start-Sleep -Seconds ($delay * ($attempt))
-                $attempt++
+                $resp = Read-Host "Want to Attempt again. Only yes is acceptable response"
+                if ($resp -in @("yes","y")) {
+                    Write-Host Your response is positive i.e $resp
+                    Write-Host Attempt $attempt with a delay of($delay * ($attempt)) Seconds
+                    $vms = Import-Csv -Path "./failedJobError.csv" 
+                    Start-Sleep -Seconds ($delay * ($attempt))
+                    $attempt++
+                } else {
+                    break; break;
+                }
+                
             }
             else {
                 break; break;
