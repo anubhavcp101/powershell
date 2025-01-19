@@ -1,6 +1,6 @@
 #
 $maxJobCount = 11
-$csvFilePath = "C:\Users\yashw\OneDrive\Desktop\powershell\powershell\vms.csv"
+$csvFilePath = ".\vms.csv"
 $attempt = 0
 $maxAttempt = 3
 $delay = 30
@@ -19,7 +19,7 @@ $task = {
     Write-Host "Finished Job for" $vm.Name
 }
 
-while ($attempt -lt $maxAttempt) {
+while ($attempt -le $maxAttempt) {
     Set-Location $PSScriptRoot | Out-Null
     $vms = $null
     if ($attempt -eq 0) {
