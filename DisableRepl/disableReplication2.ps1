@@ -17,8 +17,14 @@ $replres | ForEach-Object {
   $fab = Get-AzRecoveryServicesAsrFabric -Name $_.fabric
   $container = Get-AzRecoveryServicesAsrProtectionContainer -Name $_.container -Fabric $fab
   $item = Get-AzRecoveryServicesAsrReplicationProtectedItem -FriendlyName $_.vm -ProtectionContainer $container
-  $job = Remove-AzRecoveryServicesAsrReplicationProtectedItem -InputObject $item -Force
-  Write-Output $job
+  $outputJob = Remove-AzRecoveryServicesAsrReplicationProtectedItem -InputObject $item -Force
+
+  while (($outputJob.State -eq "InProgress") -or ($outputJob.State -eq "NotStarted")){
+    Start-Sleep -Seconds 30
+    $outputJob = Get-AzRecoveryServicesAsrJob -Job $outputJob
+}
+
+  Write-Output $outputJob.StateDescription
 }# azcontext should be dr subscription
 <#
 '
