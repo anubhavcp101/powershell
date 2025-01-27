@@ -9,7 +9,7 @@ function diskSkuChange {
     $diskquery = "
     resources
     | where type == ""microsoft.compute/disks""
-    | where name like $diskName
+    | where name like ""$diskName""
     | project id,subscriptionId
     "
     $qres = Search-AzGraph -Query $diskquery -UseTenantScope -First 1000
