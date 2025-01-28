@@ -21,7 +21,8 @@ function diskSkuChange {
         Write-Host Too many disks $diskName
     }
     else {
-        Set-AzContext -SubscriptionId $qres.subscriptionId
+        $currentSubscriptionId = (Get-AzContext).Subscription.Id.ToString()
+        if ($currentSubscriptionId -ne $qres.subscriptionId) { Set-AzContext -SubscriptionId $qres.subscriptionId -ErrorAction Stop }        
         $disk = Get-AzResource -ResourceId $qres.id
         $vm = Get-AzVM -ResourceId $disk.ManagedBy
         Write-Host Stopping the vm: $vm.Name
@@ -70,8 +71,10 @@ function startVmAfterDiskChange {
             Write-Host Too many disks $diskName
         }
         else {
-            Set-AzContext -SubscriptionId $qres.subscriptionId
-            $disk = Get-AzResource -ResourceId $qres.id
+            # Set-AzContext -SubscriptionId $qres.subscriptionId -ErrorAction Stop
+            $currentSubscriptionId = (Get-AzContext).Subscription.Id.ToString()
+            if ($currentSubscriptionId -ne $qres.subscriptionId) { Set-AzContext -SubscriptionId $qres.subscriptionId -ErrorAction Stop } 
+            $disk = Get-AzResource -ResourceId $qres.id -ErrorAction Stop
             # $vm = Get-AzVM -ResourceId $disk.ManagedBy
             Start-AzVM -Id $disk.ManagedBy -NoWait
         }
@@ -103,7 +106,9 @@ function diskSkuChange2 {
         Write-Host Too many disks $diskName
     }
     else {
-        Set-AzContext -SubscriptionId $qres.subscriptionId
+        $currentSubscriptionId = (Get-AzContext).Subscription.Id.ToString()
+        if ($currentSubscriptionId -ne $qres.subscriptionId) { Set-AzContext -SubscriptionId $qres.subscriptionId -ErrorAction Stop }
+        # Set-AzContext -SubscriptionId $qres.subscriptionId
         $disk = Get-AzResource -ResourceId $qres.id
         $vm = Get-AzVM -ResourceId $disk.ManagedBy
         if ($withoutStoppingVM) {
