@@ -15,11 +15,14 @@ function asgAssociate {
     $resIdCount = ($resId | Measure-Object).Count 
     if ($resIdCount -gt 0 -and $resIdCount -lt 2) {
         $AzVm = Get-AzVM -ResourceId $resId
-        $nic = Get-AzNetworkInterface -ResourceId $Vm.NetworkProfile.NetworkInterfaces[0].id
+        $nic = Get-AzNetworkInterface -ResourceId $AzVm.NetworkProfile.NetworkInterfaces[0].id
         $asgs | ForEach-Object {
-            $asg = Get-AzApplicationSecurityGroup -Name $_
-            $nic.IpConfigurations[0].ApplicationSecurityGroups.Add($asg)
+            $mAsg = Get-AzApplicationSecurityGroup | where Name -like $_
+            $mAsg | ForEach-Object {
+                $nic.IpConfigurations[0].ApplicationSecurityGroups.Add($asg)
+            }
         }
+        $nic | Set-AzNetworkInterface
     } else {
         Write-Error $vmname Not found
     }
