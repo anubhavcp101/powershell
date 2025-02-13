@@ -91,5 +91,12 @@ resources
 | mv-expand DnsConfigs
 | project name, FQDN = DnsConfigs.fqdn, IpAddress = DnsConfigs.ipAddresses[0]
 
+// To get vm backup job which are crash consistent
+recoveryservicesresources
+| where type == "microsoft.recoveryservices/vaults/backupjobs"
+| where properties.backupManagementType == 'AzureIaasVM' and properties.status != 'Completed'
+| project VM = properties.entityFriendlyName, backupError = tostring(properties.errorDetails[0].errorString), startDate = split(properties.startTime,"T")[0], backupStatus = tostring(properties.status), properties.errorDetails
+| where backupError contains "Crash consistent"
+
 // --------------------------------
 
