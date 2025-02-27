@@ -1,7 +1,7 @@
 #
 $vaultName = "testVault"
 $vaultRG = "rg-drTest"
-$location = "westus3"
+$location = "westus"
 New-AzRecoveryServicesVault -Name $vaultName -ResourceGroupName $vaultRG -Location $location -PublicNetworkAccess "Disabled"
 $vault = Get-AzRecoveryServicesVault -Name $vaultName 
 #Set-AzRecoveryServicesBackupProperty  -Vault $vault -BackupStorageRedundancy LocallyRedundant
@@ -9,10 +9,10 @@ $vault = Get-AzRecoveryServicesVault -Name $vaultName
 Set-AzRecoveryServicesAsrVaultContext -Vault $vault
 #Set-AzRecoveryServicesVaultContext -Vault $vault
 $vaultId = $vault.ID
-$vaultSettingsFile = Get-AzRecoveryServicesVaultSettingsFile -Vault $vault -Path "." -SiteRecovery 
-$fileLocation = ((Get-ChildItem -Path ./*.VaultCredentials).PSpath -split("::"))[-1]
+# $vaultSettingsFile = Get-AzRecoveryServicesVaultSettingsFile -Vault $vault -Path "." -SiteRecovery 
+# $fileLocation = ((Get-ChildItem -Path ./*.VaultCredentials).PSpath -split("::"))[-1]
 #
-Import-AzRecoveryServicesAsrVaultSettingsFile -Path $fileLocation
+# Import-AzRecoveryServicesAsrVaultSettingsFile -Path $fileLocation
 #
 #Set-AzRecoveryServicesBackupProperty -Vault $vault -BackupStorageRedundancy LocallyRedundant
 

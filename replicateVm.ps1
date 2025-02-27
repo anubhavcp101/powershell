@@ -16,7 +16,7 @@ function replicateVm {
     $vaultId = (Search-AzGraph -Query "resources | where type == ""microsoft.recoveryservices/vaults"" | where name like ""$vaultName"" | project id,subscriptionId" -UseTenantScope).id 
     Set-AzContext -Subscription ($vaultId -split ("/"))[2]
     $azVault = Get-AzRecoveryServicesVault -ResourceGroupName ($vaultId -split ("/"))[4] -Name ($vaultId -split ("/"))[-1]
-    Set-AzRecoveryServicesAsrVaultContext $azVault
+    Set-AzRecoveryServicesAsrVaultContext -Vault $azVault
 
     $vmname = $vmName.Replace(' ', '')
     $resId = (Search-AzGraph -Query ("resources | where type == ""microsoft.compute/virtualmachines"" | where name like """ + $vmname + """ | project id") -UseTenantScope).id; write $resId;
@@ -64,7 +64,7 @@ function replicateVm {
         }
 
         Set-AzContext -Subscription ($vaultId -split ("/"))[2]
-        Set-AzRecoveryServicesAsrVaultContext $azVault
+        Set-AzRecoveryServicesAsrVaultContext -Vault $azVault
         
         $primaryFabric = Get-AzRecoveryServicesAsrFabric | where-object { $_.fabricSpecificDetails.Location -like $primaryRegion -or $_.fabricSpecificDetails.Location -like $primaryRegion.replace(' ', '') }
         $primaryContainer = Get-AzRecoveryServicesAsrProtectionContainer -Fabric $primaryFabric | Where-Object { $_.Name -like "*$primaryRegion*" }
@@ -98,3 +98,4 @@ function replicateVm {
     }
 
 }
+replicateVm -vmName "vm-test" -failoverRG "rg-drTest" -cacheStorageAccount "" -failoverDiskEncryptionSet "" -vault "testVault" -primaryRegion "eastus" -failoverRegion "westus" -replicationPolicy "myReplicationPolicy"
