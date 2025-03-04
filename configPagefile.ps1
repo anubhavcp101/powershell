@@ -11,9 +11,9 @@ $PageFile.Name = "T:\pagefile.sys"
 try {
     $PageFile.Put()
     #
-    Write-Host "Page file successfully configured on T:\pagefile.sys"
+    Write-Output "Page file successfully configured on T:\pagefile.sys"
 } catch {
     Write-Error "Error configuring page file: $($_.Exception.Message)"
 }
-Write-Host "A system reboot is required for these changes to take effect. So, rebooting it."
+Write-Output "A system reboot is required for these changes to take effect. So, rebooting it."
 shutdown /r 
