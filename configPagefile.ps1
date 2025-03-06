@@ -1,6 +1,6 @@
 #
 $RAM = (Get-WmiObject -Class Win32_ComputerSystem).TotalPhysicalMemory / 1MB
-$MinSize = [math]::Round(2 * $RAM)
+$MinSize = [math]::Round(.21 * $RAM)
 $TDriveSize = (Get-PSDrive -Name T).Used / 1MB + (Get-PSDrive -Name T).Free / 1MB
 $MaxSize = [math]::Round(0.84 * $TDriveSize)
 $PageFile = Get-WmiObject Win32_PageFileSetting
