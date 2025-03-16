@@ -2,12 +2,12 @@
 # Here snapshots.csv should have 7 columns for snapshot name, its resource group and its subscription and then its corresponding diskName, diskRG, diskSubscription, and diskEncryptionSetId
 $csvFilePath = ''
 $workdir = Split-Path $csvFilePath
-$snpshots = Import-Csv -Path $csvFilePath
+$snapshots = Import-Csv -Path $csvFilePath
 $filePath = "$workdir/diskCreationFromSnapshot-$(Get-Date -Format 'dd-MM-yyyyThh-mm-ss').csv"
 "DiskName,DiskRG,DiskSubscription,Msg" | Out-File -FilePath $filePath -Append -Force
 #
 Set-Location $workdir
-$snpshots | ForEach-Object {
+$snapshots | ForEach-Object {
     Set-AzContext -Subscription $_.Subscription -ErrorAction Stop
     $snapshot = Get-AzSnapshot -SnapshotName $_.SnapshotName.trim() -ResourceGroupName $_.ResourceGroup.trim()
     #
