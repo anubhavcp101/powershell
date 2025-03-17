@@ -9,16 +9,16 @@ $task = {
     Write-Host "Starting Job for $($disk.diskName)"
     Set-Location $wrkdir 
     # the csv file should have columns named diskName, diskRG, diskSubscription and then snapshotName, snapshotRG, snapshotSubscription and snapshotLocation
-    Set-AzContext -Subscription $disk.diskSubscription -ErrorAction Stop
+    Set-AzContext -Subscription $disk.diskSubscription.trim() -ErrorAction Stop
     #
     $ErrorActionPreference = 'Stop'
     $filePath = ".\snapshots.csv"
-    $azDisk = Get-AzDisk -DiskName $disk.diskName -ResourceGroupName $disk.diskRG
-    $snapshotConfig = New-AzSnapshotConfig -SkuName 'Standard_LRS' -Location $disk.snapshotLocation -CreateOption Copy -SourceUri $azDisk.Id
-    Set-AzContext -Subscription $disk.snapshotSubscription
+    $azDisk = Get-AzDisk -DiskName $disk.diskName.trim() -ResourceGroupName $disk.diskRG.trim()
+    $snapshotConfig = New-AzSnapshotConfig -SkuName 'Standard_LRS' -Location $disk.snapshotLocation.trim() -CreateOption Copy -SourceUri $azDisk.Id
+    Set-AzContext -Subscription $disk.snapshotSubscription.trim()
     if ($disk.snapshotName) {
         try {
-            New-AzSnapshot -SnapshotName $disk.snapshotName -ResourceGroupName $disk.snapshotRG -Snapshot $snapshotConfig
+            New-AzSnapshot -SnapshotName $disk.snapshotName.trim() -ResourceGroupName $disk.snapshotRG.trim() -Snapshot $snapshotConfig
             "$($disk.snapshotName),$($disk.snapshotRG),$($disk.snapshotSubscription),Success" | Out-File -FilePath $filePath -Append -Force
             Write-Output "Success for $($disk.snapshotName)"
         }
@@ -30,7 +30,7 @@ $task = {
     }
     else {
         try {
-            New-AzSnapshot -SnapshotName ("snpsht-$($azdisk.Name)") -ResourceGroupName $snapshotRG -Snapshot $snapshotConfig
+            New-AzSnapshot -SnapshotName ("snpsht-$($azdisk.Name)") -ResourceGroupName $disk.snapshotRG.trim() -Snapshot $snapshotConfig
             "snpsht-$($azDisk.Name),$($disk.snapshotRG),$($disk.snapshotSubscription),Success" | Out-File -FilePath $filePath -Append -Force
             Write-Output "Success for snpsht-$($azDisk.Name)"
         }
