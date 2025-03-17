@@ -8,7 +8,7 @@ $task = {
         #
     Write-Host "Starting Job for $($disk.diskName)"
     Set-Location $wrkdir 
-    # the csv file should have diskName, diskRG, diskSubscription and then snapshotName, snapshotRG, snapshotSubscription and snapshotLocation
+    # the csv file should have columns named diskName, diskRG, diskSubscription and then snapshotName, snapshotRG, snapshotSubscription and snapshotLocation
     Set-AzContext -Subscription $disk.diskSubscription -ErrorAction Stop
     #
     $ErrorActionPreference = 'Stop'
@@ -31,14 +31,14 @@ $task = {
     else {
         try {
             New-AzSnapshot -SnapshotName ("snpsht-$($azdisk.Name)") -ResourceGroupName $snapshotRG -Snapshot $snapshotConfig
-            "snpsht-$($azDisk.Name),$($snapshotRG),$($snapshotSubscription),Success" | Out-File -FilePath $filePath -Append -Force
+            "snpsht-$($azDisk.Name),$($disk.snapshotRG),$($disk.snapshotSubscription),Success" | Out-File -FilePath $filePath -Append -Force
             Write-Output "Success for snpsht-$($azDisk.Name)"
         }
         catch {
-            Write-Error "An error occurred during snapshot creation for snpsht-$($azvm.Name)-$(($_.ManagedDisk.Id -split "/")[-1])"
+            Write-Error "An error occurred during snapshot creation for snpsht-$($azDisk.Name)"
             $errMsg = $_.Exception.Message
             Write-Output $errMsg
-            "snpsht-$($azDisk.Name),$($snapshotRG),$($snapshotSubscription),Failure,$errMsg" | Out-File -FilePath $filePath -Append -Force
+            "snpsht-$($azDisk.Name),$($disk.snapshotRG),$($disk.snapshotSubscription),Failure,$errMsg" | Out-File -FilePath $filePath -Append -Force
         }
     }
     Write-Host "Finished Job for $($disk.diskName)" 
