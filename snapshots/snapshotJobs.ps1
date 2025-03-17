@@ -3,32 +3,45 @@ $maxJobCount = 11
 $vms = Import-Csv -Path "./vms.csv" -ErrorAction Stop #-Header "Name"
 $task = {
     param(
-        $snpshot,
+        $disk,
         $wrkdir)
         #
-    Write-Host "Starting Job for $($snpshot.SnapshotName)" 
+    Write-Host "Starting Job for $($disk.diskName)"
     Set-Location $wrkdir 
-    # Here the csv file should have 7 columns for SnapshotName, its ResourceGroup, its Subscription and then its corresponding diskName, diskRG, diskSubscription, and diskEncryptionSetId
-    Set-AzContext -Subscription $snpshot.Subscription -ErrorAction Stop
+    # the csv file should have diskName, diskRG, diskSubscription and then snapshotName, snapshotRG, snapshotSubscription and snapshotLocation
+    Set-AzContext -Subscription $disk.diskSubscription -ErrorAction Stop
     #
     $ErrorActionPreference = 'Stop'
-    $filePath = "./diskCreationFromSnapshot.csv"
-    $snapshot = Get-AzSnapshot -SnapshotName $snpshot.SnapshotName.trim() -ResourceGroupName $snpshot.ResourceGroup.trim()
-    $diskConfig = New-AzDiskConfig -SkuName 'Standard_LRS' -CreateOption Copy -SourceResourceId $snapshot.Id
-    try {
-        Set-AzContext -Subscription $snpshot.diskSubscription.trim() -ErrorAction Stop
-        New-AzDisk -Disk $diskConfig -DiskName $snpshot.diskName.trim() -ResourceGroupName $snpshot.diskRG.trim() -DiskEncryptionSetId $snpshot.diskEncryptionSetId.trim()
-        "$($snpshot.diskName),$($snpshot.diskRG),$($snpshot.diskSubscription),Success" | Out-File -FilePath $filePath -Append -Force
-        Write-Output "Success for $($snpshot.diskName.trim())"
+    $filePath = ".\snapshots.csv"
+    $azDisk = Get-AzDisk -DiskName $disk.diskName -ResourceGroupName $disk.diskRG
+    $snapshotConfig = New-AzSnapshotConfig -SkuName 'Standard_LRS' -Location $disk.snapshotLocation -CreateOption Copy -SourceUri $azDisk.Id
+    Set-AzContext -Subscription $disk.snapshotSubscription
+    if ($disk.snapshotName) {
+        try {
+            New-AzSnapshot -SnapshotName $disk.snapshotName -ResourceGroupName $disk.snapshotRG -Snapshot $snapshotConfig
+            "$($disk.snapshotName),$($disk.snapshotRG),$($disk.snapshotSubscription),Success" | Out-File -FilePath $filePath -Append -Force
+            Write-Output "Success for $($disk.snapshotName)"
+        }
+        catch {
+            Write-Error "An error occurred during snapshot creation for $($disk.snapshotName)"
+            $errMsg = $_.Exception.Message
+            "$($disk.snapshotName),$($disk.snapshotRG),$($disk.snapshotSubscription),Failure,$errMsg" | Out-File -FilePath $filePath -Append -Force
+        }
     }
-    catch {
-        Write-Error "An error occurred during disk creation for $($_.diskName)"
-        $errMsg = $_.Exception.Message
-        Write-Output $errMsg
-        "$($snpshot.diskName),$($snpshot.diskRG),$($snpshot.diskSubscription),Failure,$errMsg" | Out-File -FilePath $filePath -Append -Force
+    else {
+        try {
+            New-AzSnapshot -SnapshotName ("snpsht-$($azdisk.Name)") -ResourceGroupName $snapshotRG -Snapshot $snapshotConfig
+            "snpsht-$($azDisk.Name),$($snapshotRG),$($snapshotSubscription),Success" | Out-File -FilePath $filePath -Append -Force
+            Write-Output "Success for snpsht-$($azDisk.Name)"
+        }
+        catch {
+            Write-Error "An error occurred during snapshot creation for snpsht-$($azvm.Name)-$(($_.ManagedDisk.Id -split "/")[-1])"
+            $errMsg = $_.Exception.Message
+            Write-Output $errMsg
+            "snpsht-$($azDisk.Name),$($snapshotRG),$($snapshotSubscription),Failure,$errMsg" | Out-File -FilePath $filePath -Append -Force
+        }
     }
-
-    Write-Host "Finished Job for $($snpshot.SnapshotName)"
+    Write-Host "Finished Job for $($disk.diskName)" 
 }
 #
 $Global:jobs = @()
@@ -37,15 +50,15 @@ $Global:totalJobs = 0
 $Global:jobErrors = ""
 $Global:errorFile = @()
 $wrkdir = $PSScriptRoot
-Set-Location $wrkdir
-$filePath = "$wrkdir/diskCreationFromSnapshot.csv"
-"DiskName,DiskRG,DiskSubscription,Msg,$(Get-Date -Format 'dd-MM-yyyyThh:mm:ss')" | Out-File -FilePath $filePath -Append -Force
+$filePath = "$wrkdir/snapshots.csv"
+"SnapshotName,SnapshotRG,SnapshotSubscription,Msg,$(Get-Date -Format 'dd-MM-yyyy hh:mm:ss')" | Out-File -FilePath $filePath -Append -Force
+
 
 $Global:totalJobs = ($vms | Measure-Object).Count
 $vms | ForEach-Object {
     if ( $jobCounter -lt $maxJobCount) {
-        Write-Host Starting Job of $_.SnapshotName
-        $job = Start-Job -Name $_.SnapshotName -ScriptBlock $task -ArgumentList $_, $wrkdir
+        Write-Host Starting Job of $_.diskName
+        $job = Start-Job -Name $_.diskName -ScriptBlock $task -ArgumentList $_, $wrkdir
         $Global:jobs += $job
         $Global:jobCounter++
     } 
@@ -55,8 +68,8 @@ while ($true) {
     $currentlyRunningJobs = $Global:jobs | where State -EQ "Running" | where HasMoreData -EQ $true
     #Write-Host Current Job is #$currentlyRunningJobs
     if ((($currentlyRunningJobs | Measure-Object).Count -lt $maxJobCount) -and (($jobCounter) -lt $Global:totalJobs)) {
-        Write-Host Starting Job of $vms[$Global:jobCounter].SnapshotName
-        $job = Start-Job -Name $vms[$Global:jobCounter].SnapshotName -ScriptBlock $task -ArgumentList $vms[$Global:jobCounter], $wrkdir 
+        Write-Host Starting Job of $vms[$Global:jobCounter].diskName
+        $job = Start-Job -Name $vms[$Global:jobCounter].diskName -ScriptBlock $task -ArgumentList $vms[$Global:jobCounter], $wrkdir 
         $Global:jobs += $job
         $Global:jobCounter++
     }

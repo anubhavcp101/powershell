@@ -30,7 +30,7 @@ $disks | ForEach-Object {
             Write-Output "Success for $($snapshotName)"
         }
         catch {
-            Write-Error "An error occurred during snapshot creation"
+            Write-Error "An error occurred during snapshot creation for $($snapshotName)"
             $errMsg = $_.Exception.Message
             "$($snapshotName),$($snapshotRG),$($snapshotSubscription),Failure,$errMsg" | Out-File -FilePath $filePath -Append -Force
         }
