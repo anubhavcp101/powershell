@@ -98,5 +98,29 @@ recoveryservicesresources
 | project VM = properties.entityFriendlyName, backupError = tostring(properties.errorDetails[0].errorString), startDate = split(properties.startTime,"T")[0], backupStatus = tostring(properties.status), properties.errorDetails
 | where backupError contains "Crash consistent"
 
+// To get VM network details like subnet, vnet
+resources
+| where type == "microsoft.network/networkinterfaces"
+| where resourceGroup == ""
+| extend vm = split(properties.virtualMachine.id,"/")[-1], subnet = tostring(split(properties.ipConfigurations[0].properties.subnet.id, "/")[-1]), vnet = split(properties.ipConfigurations[0].properties.subnet.id, "/")[-3]
+| project vm, subnet, vnet
+| join kind=inner (resources
+| where type == tolower("Microsoft.Network/virtualNetworks")
+| project name, vnetCidr = strcat_array(properties.addressSpace.addressPrefixes,", "), subnets = properties.subnets, resourceGroup, subscriptionId
+| mv-expand subnets
+| project name, vnetCidr, subnet= tostring(subnets.name), subnetCidr = subnets.properties.addressPrefix, NSG = split(tostring(subnets.properties.networkSecurityGroup.id),"/")[-1], vnetRG = resourceGroup, vnetSubs = subscriptionId) on $left.subnet == $right.subnet
+| where isnotempty(vm)
+| project vm, subnet, subnetCidr, vnet, vnetCidr, NSG, vnetRG, vnetSubs
+
+// To get DataDisk details of VMs
+resources
+| where type == "microsoft.compute/virtualmachines"
+| where resourceGroup =~ ""
+| project name, osDisk = tostring(properties.storageProfile.osDisk.diskSizeGB), dataDisk =  properties.storageProfile.dataDisks
+| mv-expand dataDisk
+| project name, osDisk, datadiskSize = dataDisk.diskSizeGB
+| summarize allDataDisk = strcat_array(make_list(datadiskSize),", ") by name
+
+
 // --------------------------------
 
