@@ -23,6 +23,7 @@ $protContainer = Get-AzRecoveryServicesAsrProtectionContainer -Name $container -
 
 $recoveryRG = Get-AzResource -ResourceId $recoveryRGId
 
+# $replicaDiskAccountType = $vm.StorageProfile.OsDisk.ManagedDisk.StorageAccountType
 $osDiskConfig = New-AzRecoveryServicesAsrAzureToAzureDiskReplicationConfig -ManagedDisk -LogStorageAccountId $cacheStorageAccountId `
     -DiskId $vm.StorageProfile.OsDisk.ManagedDisk.Id -RecoveryResourceGroupId $recoveryRGId `
     -RecoveryReplicaDiskAccountType $vm.StorageProfile.OsDisk.ManagedDisk.StorageAccountType `
@@ -32,9 +33,15 @@ $osDiskConfig = New-AzRecoveryServicesAsrAzureToAzureDiskReplicationConfig -Mana
 $diskConfigs = @()
 
 foreach ($datadisk in $vm.StorageProfile.DataDisks) {
+
+    $replicaDiskAccountType = $datadisk.ManagedDisk.StorageAccountType
+    if ($replicaDiskAccountType -in @("PremiumV2_LRS", "Ultra_LRS")) {
+        $replicaDiskAccountType = "Premium_LRS"
+    }
+
     $datadiskConfig = New-AzRecoveryServicesAsrAzureToAzureDiskReplicationConfig -ManagedDisk `
         -LogStorageAccountId $cacheStorageAccountId -DiskId $datadisk.ManagedDisk.Id -RecoveryResourceGroupId $recoveryRGId `
-        -RecoveryReplicaDiskAccountType $datadisk.ManagedDisk.StorageAccountType `
+        -RecoveryReplicaDiskAccountType $replicaDiskAccountType `
         -RecoveryTargetDiskAccountType $datadisk.ManagedDisk.StorageAccountType `
         -RecoveryDiskEncryptionSetId $recoveryDiskEncryptionSetId
 
