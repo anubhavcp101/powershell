@@ -24,19 +24,19 @@ $protContainer = Get-AzRecoveryServicesAsrProtectionContainer -Name $container -
 $recoveryRG = Get-AzResource -ResourceId $recoveryRGId
 
 $osDiskConfig = New-AzRecoveryServicesAsrAzureToAzureDiskReplicationConfig -ManagedDisk -LogStorageAccountId $cacheStorageAccountId `
--DiskId $vm.StorageProfile.OsDisk.ManagedDisk.Id -RecoveryResourceGroupId $recoveryRGId `
--RecoveryReplicaDiskAccountType $vm.StorageProfile.OsDisk.ManagedDisk.StorageAccountType `
--RecoveryTargetDiskAccountType $vm.StorageProfile.OsDisk.ManagedDisk.StorageAccountType `
--RecoveryDiskEncryptionSetId $recoveryDiskEncryptionSetId
+    -DiskId $vm.StorageProfile.OsDisk.ManagedDisk.Id -RecoveryResourceGroupId $recoveryRGId `
+    -RecoveryReplicaDiskAccountType $vm.StorageProfile.OsDisk.ManagedDisk.StorageAccountType `
+    -RecoveryTargetDiskAccountType $vm.StorageProfile.OsDisk.ManagedDisk.StorageAccountType `
+    -RecoveryDiskEncryptionSetId $recoveryDiskEncryptionSetId
 
 $diskConfigs = @()
 
 foreach ($datadisk in $vm.StorageProfile.DataDisks) {
     $datadiskConfig = New-AzRecoveryServicesAsrAzureToAzureDiskReplicationConfig -ManagedDisk `
-    -LogStorageAccountId $cacheStorageAccountId -DiskId $datadisk.ManagedDisk.Id -RecoveryResourceGroupId $recoveryRGId `
-    -RecoveryReplicaDiskAccountType $datadisk.ManagedDisk.StorageAccountType `
-    -RecoveryTargetDiskAccountType $datadisk.ManagedDisk.StorageAccountType `
-    -RecoveryDiskEncryptionSetId $recoveryDiskEncryptionSetId
+        -LogStorageAccountId $cacheStorageAccountId -DiskId $datadisk.ManagedDisk.Id -RecoveryResourceGroupId $recoveryRGId `
+        -RecoveryReplicaDiskAccountType $datadisk.ManagedDisk.StorageAccountType `
+        -RecoveryTargetDiskAccountType $datadisk.ManagedDisk.StorageAccountType `
+        -RecoveryDiskEncryptionSetId $recoveryDiskEncryptionSetId
 
     $diskConfigs += $datadiskConfig
 }
@@ -45,15 +45,23 @@ $diskConfigs += $osDiskConfig
 
 if ($vm.Zones) {
     $TempASRJob = New-AzRecoveryServicesAsrReplicationProtectedItem -AzureToAzure `
-    -AzureVmId $vm.Id -AzureToAzureDiskReplicationConfiguration $diskConfigs `
-    -ProtectionContainerMapping $primaryProtContainerMapping `
-    -Name (New-Guid).Guid `
-    -RecoveryResourceGroupId $recoveryRGId `
-    -RecoveryAvailabilityZone $vm.Zones[0]
-} else {
-    $TempASRJob = New-AzRecoveryServicesAsrReplicationProtectedItem -AzureToAzure `
-    -AzureVmId $vm.Id -AzureToAzureDiskReplicationConfiguration $diskConfigs `
-    -ProtectionContainerMapping $primaryProtContainerMapping `
-    -Name (New-Guid).Guid `
-    -RecoveryResourceGroupId $recoveryRGId
+        -AzureVmId $vm.Id -AzureToAzureDiskReplicationConfiguration $diskConfigs `
+        -ProtectionContainerMapping $primaryProtContainerMapping `
+        -Name (New-Guid).Guid `
+        -RecoveryResourceGroupId $recoveryRGId `
+        -RecoveryAvailabilityZone $vm.Zones[0]
 }
+else {
+    $TempASRJob = New-AzRecoveryServicesAsrReplicationProtectedItem -AzureToAzure `
+        -AzureVmId $vm.Id -AzureToAzureDiskReplicationConfiguration $diskConfigs `
+        -ProtectionContainerMapping $primaryProtContainerMapping `
+        -Name (New-Guid).Guid `
+        -RecoveryResourceGroupId $recoveryRGId
+}
+
+while (($TempASRJob.State -eq "InProgress") -or ($TempASRJob.State -eq "NotStarted")) {
+    Start-Sleep -Seconds 30
+    $TempASRJob = Get-AzRecoveryServicesAsrJob -Job $TempASRJob
+}
+
+Write-Output $TempASRJob.State
