@@ -1,0 +1,59 @@
+#
+$primaryVmId = ""
+
+$vaultSubscription = ""
+$vaultName = ""
+$fabric = ""
+$container = ""
+#
+$recoveryRGId = ""
+$cacheStorageAccountId = ""
+$recoveryDiskEncryptionSetId = ""
+$primaryProtContainerMapping = ""
+#
+Set-AzContext -Subscription ($primaryVmId -split "/")[2]
+$vm = Get-AzVM -ResourceId $primaryVmId
+
+Set-AzContext -Subscription $vaultSubscription
+$vault = Get-AzRecoveryServicesVault -Name $vaultName 
+Set-AzRecoveryServicesAsrVaultContext -Vault $vault
+$fab = Get-AzRecoveryServicesAsrFabric -Name $fabric
+$protContainer = Get-AzRecoveryServicesAsrProtectionContainer -Name $container -Fabric $fab
+
+
+$recoveryRG = Get-AzResource -ResourceId $recoveryRGId
+
+$osDiskConfig = New-AzRecoveryServicesAsrAzureToAzureDiskReplicationConfig -ManagedDisk -LogStorageAccountId $cacheStorageAccountId `
+-DiskId $vm.StorageProfile.OsDisk.ManagedDisk.Id -RecoveryResourceGroupId $recoveryRGId `
+-RecoveryReplicaDiskAccountType $vm.StorageProfile.OsDisk.ManagedDisk.StorageAccountType `
+-RecoveryTargetDiskAccountType $vm.StorageProfile.OsDisk.ManagedDisk.StorageAccountType `
+-RecoveryDiskEncryptionSetId $recoveryDiskEncryptionSetId
+
+$diskConfigs = @()
+
+foreach ($datadisk in $vm.StorageProfile.DataDisks) {
+    $datadiskConfig = New-AzRecoveryServicesAsrAzureToAzureDiskReplicationConfig -ManagedDisk `
+    -LogStorageAccountId $cacheStorageAccountId -DiskId $datadisk.ManagedDisk.Id -RecoveryResourceGroupId $recoveryRGId `
+    -RecoveryReplicaDiskAccountType $datadisk.ManagedDisk.StorageAccountType `
+    -RecoveryTargetDiskAccountType $datadisk.ManagedDisk.StorageAccountType `
+    -RecoveryDiskEncryptionSetId $recoveryDiskEncryptionSetId
+
+    $diskConfigs += $datadiskConfig
+}
+
+$diskConfigs += $osDiskConfig
+
+if ($vm.Zones) {
+    $TempASRJob = New-AzRecoveryServicesAsrReplicationProtectedItem -AzureToAzure `
+    -AzureVmId $vm.Id -AzureToAzureDiskReplicationConfiguration $diskConfigs `
+    -ProtectionContainerMapping $primaryProtContainerMapping `
+    -Name (New-Guid).Guid `
+    -RecoveryResourceGroupId $recoveryRGId `
+    -RecoveryAvailabilityZone $vm.Zones[0]
+} else {
+    $TempASRJob = New-AzRecoveryServicesAsrReplicationProtectedItem -AzureToAzure `
+    -AzureVmId $vm.Id -AzureToAzureDiskReplicationConfiguration $diskConfigs `
+    -ProtectionContainerMapping $primaryProtContainerMapping `
+    -Name (New-Guid).Guid `
+    -RecoveryResourceGroupId $recoveryRGId
+}
