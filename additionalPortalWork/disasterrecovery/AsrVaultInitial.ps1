@@ -22,7 +22,6 @@ Set-AzContext -Subscription $vaultSubscription
 $vault = Get-AzRecoveryServicesVault -Name $vaultName 
 Set-AzRecoveryServicesAsrVaultContext -Vault $vault
 
-#
 $createdContainer = $false
 $primaryFabric = Get-AzRecoveryServicesAsrFabric | Where-Object { $_.FriendlyName -like $primaryRegion }
 
