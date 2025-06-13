@@ -80,11 +80,22 @@ if (-not $isRecoveryNetworkMappingPresent) {
 
 function configureAsrNetworkMapping {
     param (
+        [Parameter(Mandatory = $true)]
         $primaryVMId,
+
+        [Parameter(Mandatory = $true)]
         $vaultSubscription,
+        
+        [Parameter(Mandatory = $true)]
         $vaultName,
+
+        [Parameter(Mandatory = $true)]
         $primaryRegion,
+
+        [Parameter(Mandatory = $true)]
         $secondaryRegion,
+
+        [Parameter(Mandatory = $true)]
         $recoveryVnetId
     )
     try {
