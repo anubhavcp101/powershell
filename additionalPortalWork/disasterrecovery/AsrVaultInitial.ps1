@@ -16,7 +16,7 @@ function WaitForAsrJob {
         Start-Sleep -Seconds 20
         $TempASRJob = Get-AzRecoveryServicesAsrJob -Job $TempASRJob
     }
-    return $TempAsrJob.StateDescription
+    return $TempASRJob.StateDescription
 }
 Set-AzContext -Subscription $vaultSubscription
 $vault = Get-AzRecoveryServicesVault -Name $vaultName 
