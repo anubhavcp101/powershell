@@ -100,10 +100,11 @@ function configureAsrNetworkMapping {
     )
     try {
         $ErrorActionPreference = "Stop"
-        Set-AzContext -Subscription ($primaryVMId -split "/")[2]
-        $vm = Get-AzVM -ResourceId $primaryVMId
+        $vmCtx = Set-AzContext -Subscription ($primaryVMId -split "/")[2]
+        $vm = Get-AzVM -ResourceId $primaryVMId -DefaultProfile $vmCtx
 
-        Set-AzContext -Subscription $vaultSubscription
+        $ctx = Set-AzContext -Subscription $vaultSubscription
+        $PSDefaultParameterValues['*:DefaultProfile'] = $ctx
         $vault = Get-AzRecoveryServicesVault -Name $vaultName
         Set-AzRecoveryServicesAsrVaultContext -Vault $vault
 

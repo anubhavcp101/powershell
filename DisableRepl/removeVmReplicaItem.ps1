@@ -22,9 +22,10 @@ recoveryservicesresources
 | where vm in~ ('+ $tex + ')
 '
 
-        $replres = Search-AzGraph -query $replquery -usetenantscope -first 1000
+        $replres = Search-AzGraph -query $replquery -UseTenantScope
 
-        Set-AzContext -SubscriptionId $replres.subscriptionId
+        $ctx = Set-AzContext -SubscriptionId $replres.subscriptionId
+        $PSDefaultParameterValues['*:DefaultProfile'] = $ctx
         $vault = Get-AzRecoveryServicesVault -Name $replres.vault
         #
         Set-AzRecoveryServicesAsrVaultContext -Vault $vault
