@@ -1,10 +1,10 @@
 #
 $maxJobCount = 11
-$vms = Import-Csv -Path "./vms.csv" #-Header "Name"
+# $vms = Import-Csv -Path "./vms.csv" #-Header "Name"
+$filePath = "./vms.csv"
 $task = {
     param(
-        $vm,
-        $wrkdir
+        $vm,$wrkdir
         #
     )
     Write-Host "Starting Job for" $vm.Name  
@@ -55,6 +55,8 @@ $Global:totalJobs = 0
 $Global:jobErrors = ""
 $Global:errorFile = @()
 $wrkdir = $PSScriptRoot
+Set-Location $PSScriptRoot
+$vms = Import-Csv -Path $filePath #-Header "Name"
 
 $Global:totalJobs = ($vms | Measure-Object).Count
 $vms | ForEach-Object {
