@@ -110,7 +110,7 @@ while ($true) {
                     $_.Name + "," + $errorDetails | Out-File -FilePath "./failedJobError.csv" -Append -Force
                 }
                 Write-Host ($failedJobs | Measure-Object).Count jobs failed out of $Global:totalJobs jobs
-                Stop-Transcript
+                # Stop-Transcript
             }
             Write-Host All Jobs Finished
             Write-Host ($failedJobs | Measure-Object).Count jobs failed out of $Global:totalJobs jobs
