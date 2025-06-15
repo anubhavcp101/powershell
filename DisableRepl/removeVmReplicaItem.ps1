@@ -5,8 +5,8 @@ $task = {
     param(
         $vm,
         $wrkdir
+        #
     )
-    #
     Write-Host "Starting Job for" $vm.Name  
     Set-Location $wrkdir
     try {
