@@ -11,11 +11,17 @@ $task = {
         $wrkdir
         )
     Write-Host "Starting Job for" $vm.Name 
+    try {
+        $ErrorActionPreference = "Stop"
     Set-Location $wrkdir 
 
     Start-Sleep -Seconds 11
     Write-Error "This is an error to be printed"
     Get-Item "C:\NonExistentFile2.txt" -ErrorAction Stop
+
+    } catch {
+        throw "An Error Occurred: $($_.Exception.Message)"
+    }
     Write-Host "Finished Job for" $vm.Name
 }
 

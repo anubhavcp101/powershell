@@ -5,13 +5,20 @@ $task = {
     param(
         $vm,
         $wrkdir)
-        #
+    #
     Write-Host "Starting Job for" $vm.Name 
-    Set-Location $wrkdir 
+    try {
+        $ErrorActionPreference = "Stop"
+    
+        Set-Location $wrkdir 
 
-    Start-Sleep -Seconds 11
-    Write-Error "This is an error to be printed"
-    Get-Item "C:\NonExistentFile2.txt" -ErrorAction Stop
+        Start-Sleep -Seconds 11
+        Write-Error "This is an error to be printed"
+        Get-Item "C:\NonExistentFile2.txt" -ErrorAction Stop
+    }
+    catch {
+        throw "An Error Occurred: $($_.Exception.Message)"
+    }
     Write-Host "Finished Job for" $vm.Name
 }
 #
@@ -66,7 +73,7 @@ while ($true) {
                     # $errorDetails = (Receive-Job -Job $_ -Keep) 
                     $errorDetails = $_.ChildJobs.JobStateInfo.Reason -join ";"
                     Write-Host $errorDetails
-                    $_.Name+","+$errorDetails | Out-File -FilePath "./failedJobError.csv" -Append -Force 
+                    $_.Name + "," + $errorDetails | Out-File -FilePath "./failedJobError.csv" -Append -Force 
                 }
                 Write-Host ($failedJobs | Measure-Object).Count jobs failed out of $Global:totalJobs jobs
                 # Stop-Transcript
