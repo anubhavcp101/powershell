@@ -28,13 +28,13 @@ $primaryFabric = Get-AzRecoveryServicesAsrFabric | Where-Object { $_.FriendlyNam
 if (-not $primaryFabric) {
     $TempASRJob = New-AzRecoveryServicesAsrFabric -Azure -Name "asr-a2a-primary-$($primaryRegion.tolower().replace(' ',''))" -Location $primaryRegion
     WaitForAsrJob -TempAsrJob $TempASRJob
-    $primaryfab = Get-AzRecoveryServicesAsrFabric -Name "asr-a2a-primary-$($primaryRegion.tolower().replace(' ',''))"
+    $primaryFabric = Get-AzRecoveryServicesAsrFabric -Name "asr-a2a-primary-$($primaryRegion.tolower().replace(' ',''))"
 
     $createdContainer = $true
-    $TempASRJob = New-AzRecoveryServicesAsrProtectionContainer -Name "asr-a2a-primary-$($primaryRegion.tolower().replace(' ',''))-container" -InputObject $primaryfab
+    $TempASRJob = New-AzRecoveryServicesAsrProtectionContainer -Name "asr-a2a-primary-$($primaryRegion.tolower().replace(' ',''))-container" -InputObject $primaryFabric
     WaitForAsrJob -TempAsrJob $TempASRJob
 
-    $primaryContainer = Get-AzRecoveryServicesAsrProtectionContainer -Name "asr-a2a-primary-$($primaryRegion.tolower().replace(' ',''))-container" -Fabric $primaryfab
+    $primaryContainer = Get-AzRecoveryServicesAsrProtectionContainer -Name "asr-a2a-primary-$($primaryRegion.tolower().replace(' ',''))-container" -Fabric $primaryFabric
 
 }
 
@@ -43,12 +43,12 @@ $secondaryFabric = Get-AzRecoveryServicesAsrFabric | Where-Object { $_.FriendlyN
 if (-not $secondaryFabric) {
     $TempASRJob = New-AzRecoveryServicesAsrFabric -Azure -Name "asr-a2a-secondary-$($secondaryRegion.tolower().replace(' ',''))" -Location $secondaryRegion
     WaitForAsrJob -TempAsrJob $TempASRJob
-    $secondaryfab = Get-AzRecoveryServicesAsrFabric -Name "asr-a2a-secondary-$($secondaryRegion.tolower().replace(' ',''))"
+    $secondaryFabric = Get-AzRecoveryServicesAsrFabric -Name "asr-a2a-secondary-$($secondaryRegion.tolower().replace(' ',''))"
 
     $createdContainer = $true
-    $TempASRJob = New-AzRecoveryServicesAsrProtectionContainer -Name "asr-a2a-secondary-$($secondaryRegion.tolower().replace(' ',''))-container" -InputObject $secondaryfab
+    $TempASRJob = New-AzRecoveryServicesAsrProtectionContainer -Name "asr-a2a-secondary-$($secondaryRegion.tolower().replace(' ',''))-container" -InputObject $secondaryFabric
     WaitForAsrJob -TempAsrJob $TempASRJob
-    $secondaryContainer = Get-AzRecoveryServicesAsrProtectionContainer -Name "asr-a2a-secondary-$($secondaryRegion.tolower().replace(' ',''))-container" -Fabric $secondaryfab
+    $secondaryContainer = Get-AzRecoveryServicesAsrProtectionContainer -Name "asr-a2a-secondary-$($secondaryRegion.tolower().replace(' ',''))-container" -Fabric $secondaryFabric
 
 }
 
@@ -61,22 +61,22 @@ if (-not $replicationPolicy) {
     $ReplicationPolicy = Get-AzRecoveryServicesAsrPolicy -Name $replicationPolicy
 }
 
-$primaryContainer = (Get-AzRecoveryServicesAsrProtectionContainer -Fabric $primaryfab)[0]
+$primaryContainer = (Get-AzRecoveryServicesAsrProtectionContainer -Fabric $primaryFabric)[0]
 if (-not $primaryContainer) {
     $createdContainer = $true
-    $TempASRJob = New-AzRecoveryServicesAsrProtectionContainer -Name "asr-a2a-primary-$($primaryRegion.tolower().replace(' ',''))-container" -InputObject $primaryfab
+    $TempASRJob = New-AzRecoveryServicesAsrProtectionContainer -Name "asr-a2a-primary-$($primaryRegion.tolower().replace(' ',''))-container" -InputObject $primaryFabric
     WaitForAsrJob -TempAsrJob $TempASRJob
 
-    $primaryContainer = Get-AzRecoveryServicesAsrProtectionContainer -Name "asr-a2a-primary-$($primaryRegion.tolower().replace(' ',''))-container" -Fabric $primaryfab
+    $primaryContainer = Get-AzRecoveryServicesAsrProtectionContainer -Name "asr-a2a-primary-$($primaryRegion.tolower().replace(' ',''))-container" -Fabric $primaryFabric
 
 }
 
-$secondaryContainer = (Get-AzRecoveryServicesAsrProtectionContainer -Fabric $secondaryfab)[0]
+$secondaryContainer = (Get-AzRecoveryServicesAsrProtectionContainer -Fabric $secondaryFabric)[0]
 if (-not $secondaryContainer) {
     $createdContainer = $true
-    $TempASRJob = New-AzRecoveryServicesAsrProtectionContainer -Name "asr-a2a-secondary-$($secondaryRegion.tolower().replace(' ',''))-container" -InputObject $secondaryfab
+    $TempASRJob = New-AzRecoveryServicesAsrProtectionContainer -Name "asr-a2a-secondary-$($secondaryRegion.tolower().replace(' ',''))-container" -InputObject $secondaryFabric
     WaitForAsrJob -TempAsrJob $TempASRJob
-    $secondaryContainer = Get-AzRecoveryServicesAsrProtectionContainer -Name "asr-a2a-secondary-$($secondaryRegion.tolower().replace(' ',''))-container" -Fabric $secondaryfab
+    $secondaryContainer = Get-AzRecoveryServicesAsrProtectionContainer -Name "asr-a2a-secondary-$($secondaryRegion.tolower().replace(' ',''))-container" -Fabric $secondaryFabric
 
 }
 
@@ -153,9 +153,9 @@ function configureAsrVault {
             $TempASRJob = New-AzRecoveryServicesAsrFabric -Azure -Name $fabricName -Location $primaryRegion
             $fabricReturn = WaitForAsrJob -TempAsrJob $TempASRJob
             Write-Output "Primary Fabric Creation: $($fabricReturn)"
-            $primaryfab = Get-AzRecoveryServicesAsrFabric -Name $fabricName
+            $primaryFabric = Get-AzRecoveryServicesAsrFabric -Name $fabricName
 
-            if ( -not $primaryfab) {
+            if ( -not $primaryFabric) {
                 Write-Error "Failed to create Primary Fabric: $($fabricName). Please check Site Recovery Jobs in the Vault"
                 return
             }
@@ -163,11 +163,11 @@ function configureAsrVault {
             $containerName = "asr-a2a-primary-$($primaryRegion.tolower().replace(' ',''))-container"
             Write-Output "Trying to Create Primary Container in the Primary Fabric: $($containerName)"
             $createdContainer = $true
-            $TempASRJob = New-AzRecoveryServicesAsrProtectionContainer -Name $containerName -InputObject $primaryfab
+            $TempASRJob = New-AzRecoveryServicesAsrProtectionContainer -Name $containerName -InputObject $primaryFabric
             $containerReturn = WaitForAsrJob -TempAsrJob $TempASRJob
             Write-Output "Primary Container Creation: $($containerReturn)"
 
-            $primaryContainer = Get-AzRecoveryServicesAsrProtectionContainer -Name "asr-a2a-primary-$($primaryRegion.tolower().replace(' ',''))-container" -Fabric $primaryfab
+            $primaryContainer = Get-AzRecoveryServicesAsrProtectionContainer -Name "asr-a2a-primary-$($primaryRegion.tolower().replace(' ',''))-container" -Fabric $primaryFabric
 
             if ( -not $primaryContainer) {
                 Write-Error "Failed to create Primary Container: $($containerName). Please check Site Recovery Jobs in the Vault"
@@ -186,22 +186,22 @@ function configureAsrVault {
     if (-not $secondaryFabric) {
         Write-Output "Secondary Fabric doesn't exist"
         $fabricName = "asr-a2a-primary-$($secondaryRegion.tolower().replace(' ',''))"
-        Write-Output "Trying to Create Primary Fabric with Name $($fabricName)"
+        Write-Output "Trying to Create Secondary Fabric with Name $($fabricName)"
         try {
             
             $TempASRJob = New-AzRecoveryServicesAsrFabric -Azure -Name $fabricName -Location $secondaryRegion
             $fabricReturn = WaitForAsrJob -TempAsrJob $TempASRJob
             Write-Output "Secondary Fabric Creation: $($fabricReturn)"
 
-            $secondaryfab = Get-AzRecoveryServicesAsrFabric -Name $fabricName
+            $secondaryFabric = Get-AzRecoveryServicesAsrFabric -Name $fabricName
 
             $containerName = "asr-a2a-secondary-$($secondaryRegion.tolower().replace(' ',''))-container"
             Write-Output "Trying to Create Secondary Container in the Secondary Fabric: $($containerName)"
             $createdContainer = $true
-            $TempASRJob = New-AzRecoveryServicesAsrProtectionContainer -Name $containerName -InputObject $secondaryfab
+            $TempASRJob = New-AzRecoveryServicesAsrProtectionContainer -Name $containerName -InputObject $secondaryFabric
             $containerReturn = WaitForAsrJob -TempAsrJob $TempASRJob
-            Write-Output "Primary Container Creation: $($containerReturn)"
-            $secondaryContainer = Get-AzRecoveryServicesAsrProtectionContainer -Name $containerName -Fabric $secondaryfab
+            Write-Output "Secondary Container Creation: $($containerReturn)"
+            $secondaryContainer = Get-AzRecoveryServicesAsrProtectionContainer -Name $containerName -Fabric $secondaryFabric
 
             if ( -not $secondaryContainer) {
                 Write-Error "Failed to create Secondary Container: $($containerName). Please check Site Recovery Jobs in the Vault"
@@ -218,17 +218,17 @@ function configureAsrVault {
 
     # Pending Containers and Container Mappings 
 
-    $ReplicationPolicy = Get-AzRecoveryServicesAsrPolicy -Name $replicationPolicy
+    $Policy = Get-AzRecoveryServicesAsrPolicy -Name $replicationPolicy -ErrorAction SilentlyContinue
 
-    if (-not $replicationPolicy) {
+    if (-not $Policy) {
         Write-Output "Didn't the find Replication Policy. Trying to create a replication policy: $($replicationPolicy)"
         $TempASRJob = New-AzRecoveryServicesAsrPolicy -AzureToAzure -Name $replicationPolicy -RecoveryPointRetentionInHours 24 -ApplicationConsistentSnapshotFrequencyInHours 3
     
         $policyReturn = WaitForAsrJob -TempAsrJob $TempASRJob
         Write-Output "Replication Policy Creation: $($policyReturn)"
-        $replicationPolicy = Get-AzRecoveryServicesAsrPolicy -Name $replicationPolicy
+        $Policy = Get-AzRecoveryServicesAsrPolicy -Name $replicationPolicy
 
-        if (-not $replicationPolicy) {
+        if (-not $Policy) {
             Write-Error "An Error Occurred during Policy Creation: $($replicationPolicy). Please check Site Recovery Jobs in the Vault"
             return
         }
@@ -236,16 +236,16 @@ function configureAsrVault {
         Write-Output "Replication Policy already exists"
     }
 
-    $primaryContainer = (Get-AzRecoveryServicesAsrProtectionContainer -Fabric $primaryfab)[0]
+    $primaryContainer = (Get-AzRecoveryServicesAsrProtectionContainer -Fabric $primaryFabric)[0]
     if (-not $primaryContainer) {
         $createdContainer = $true
         $containerName = "asr-a2a-primary-$($primaryRegion.tolower().replace(' ',''))-container"
         Write-Output "Didn't find Primary Container. Trying to create the primary container with name: $($containerName)"
-        $TempASRJob = New-AzRecoveryServicesAsrProtectionContainer -Name $containerName -InputObject $primaryfab
+        $TempASRJob = New-AzRecoveryServicesAsrProtectionContainer -Name $containerName -InputObject $primaryFabric
         $containerReturn = WaitForAsrJob -TempAsrJob $TempASRJob
         Write-Output "Primary Container Creation: $($containerReturn)"
 
-        $primaryContainer = Get-AzRecoveryServicesAsrProtectionContainer -Name $containerName -Fabric $primaryfab
+        $primaryContainer = Get-AzRecoveryServicesAsrProtectionContainer -Name $containerName -Fabric $primaryFabric
 
         if (-not $primaryContainer) {
             Write-Error "An Error Occurred during primary container creation: $($_.Exception.Message). Please check Site Recovery Jobs in the Vault"
@@ -255,15 +255,15 @@ function configureAsrVault {
         Write-Output "Primary Container already exists."
     }
 
-    $secondaryContainer = (Get-AzRecoveryServicesAsrProtectionContainer -Fabric $secondaryfab)[0]
+    $secondaryContainer = (Get-AzRecoveryServicesAsrProtectionContainer -Fabric $secondaryFabric)[0]
     if (-not $secondaryContainer) {
         $createdContainer = $true
         $containerName = "asr-a2a-secondary-$($secondaryRegion.tolower().replace(' ',''))-container"
-        $TempASRJob = New-AzRecoveryServicesAsrProtectionContainer -Name $containerName -InputObject $secondaryfab
+        $TempASRJob = New-AzRecoveryServicesAsrProtectionContainer -Name $containerName -InputObject $secondaryFabric
         $containerReturn = WaitForAsrJob -TempAsrJob $TempASRJob
         Write-Output "Secondary Container Creation: $($containerReturn)"
 
-        $secondaryContainer = Get-AzRecoveryServicesAsrProtectionContainer -Name $containerName -Fabric $secondaryfab
+        $secondaryContainer = Get-AzRecoveryServicesAsrProtectionContainer -Name $containerName -Fabric $secondaryFabric
         if (-not $secondaryContainer) {
             Write-Error "An Error Occurred during secondary container creation: $($_.Exception.Message). Please check Site Recovery Jobs in the Vault"
             return
@@ -276,14 +276,14 @@ function configureAsrVault {
 
         Write-Output "As created container earlier. So, creating container mappings now"
 
-        $TempASRJob = New-AzRecoveryServicesAsrProtectionContainerMapping -Name "$($primaryRegion.tolower().replace(' ',''))-$($secondaryRegion.tolower().replace(' ',''))-mapping" `
-            -Policy $replicationPolicy -PrimaryProtectionContainer $primaryContainer -RecoveryProtectionContainer $secondaryContainer
+        $TempASRJob = New-AzRecoveryServicesAsrProtectionContainerMapping -Name "$($primaryRegion.tolower().replace(' ',''))-$($secondaryRegion.tolower().replace(' ',''))-$($replicationPolicy)-mapping" `
+            -Policy $Policy -PrimaryProtectionContainer $primaryContainer -RecoveryProtectionContainer $secondaryContainer
 
         $containerMappingReturn = WaitForAsrJob -TempAsrJob $TempASRJob
         Write-Output "Primary Container Mapping Creation: $($containerMappingReturn)"
 
-        $TempASRJob = New-AzRecoveryServicesAsrProtectionContainerMapping -Name "$($secondaryRegion.tolower().replace(' ',''))-$($primaryRegion.tolower().replace(' ',''))-mapping" `
-            -Policy $replicationPolicy -PrimaryProtectionContainer $secondaryContainer -RecoveryProtectionContainer $primaryContainer
+        $TempASRJob = New-AzRecoveryServicesAsrProtectionContainerMapping -Name "$($secondaryRegion.tolower().replace(' ',''))-$($primaryRegion.tolower().replace(' ',''))-$($replicationPolicy)-mapping" `
+            -Policy $Policy -PrimaryProtectionContainer $secondaryContainer -RecoveryProtectionContainer $primaryContainer
 
         $containerMappingReturn = WaitForAsrJob -TempAsrJob $TempASRJob
         Write-Output "Secondary Container Mapping Creation: $($containerMappingReturn)"
@@ -291,10 +291,10 @@ function configureAsrVault {
 
     $primaryContainerMapping = Get-AzRecoveryServicesAsrProtectionContainerMapping -ProtectionContainer $primaryContainer | where PolicyFriendlyName -eq $replicationPolicy | where SourceFabricFriendlyName -eq $primaryRegion | where TargetFabricFriendlyName -eq $secondaryRegion
     if (-not $primaryContainerMapping) {
-        $primaryContainerMappingName = "$($primaryRegion.tolower().replace(' ',''))-$($secondaryRegion.tolower().replace(' ',''))-mapping"
+        $primaryContainerMappingName = "$($primaryRegion.tolower().replace(' ',''))-$($secondaryRegion.tolower().replace(' ',''))-$($replicationPolicy)-mapping"
         Write-Output "Primary Container Mapping not found. Trying to create primary container mapping: $($primaryContainerMappingName)"
         $TempASRJob = New-AzRecoveryServicesAsrProtectionContainerMapping -Name $primaryContainerMappingName `
-            -Policy $replicationPolicy -PrimaryProtectionContainer $primaryContainer -RecoveryProtectionContainer $secondaryContainer
+            -Policy $Policy -PrimaryProtectionContainer $primaryContainer -RecoveryProtectionContainer $secondaryContainer
     
         $containerMappingReturn = WaitForAsrJob -TempAsrJob $TempASRJob
         Write-Output "Primary Container Mapping: $($containerMappingReturn)"
@@ -307,10 +307,10 @@ function configureAsrVault {
     $secondaryContainerMapping = Get-AzRecoveryServicesAsrProtectionContainerMapping -ProtectionContainer $secondaryContainer | where PolicyFriendlyName -eq $replicationPolicy | where SourceFabricFriendlyName -eq $secondaryRegion | where TargetFabricFriendlyName -eq $primaryRegion
 
     if (-not $secondaryContainerMapping) {
-        $secondaryContainerMappingName = "$($secondaryRegion.tolower().replace(' ',''))-$($primaryRegion.tolower().replace(' ',''))-mapping"
+        $secondaryContainerMappingName = "$($secondaryRegion.tolower().replace(' ',''))-$($primaryRegion.tolower().replace(' ',''))-$($replicationPolicy)-mapping"
         Write-Output "Secondary Container Mapping not found. Trying to create secondary container mapping: $($secondaryContainerMappingName)"
         $TempASRJob = New-AzRecoveryServicesAsrProtectionContainerMapping -Name $secondaryContainerMappingName `
-            -Policy $replicationPolicy -PrimaryProtectionContainer $secondaryContainer -RecoveryProtectionContainer $primaryContainer
+            -Policy $Policy -PrimaryProtectionContainer $secondaryContainer -RecoveryProtectionContainer $primaryContainer
     
         $containerMappingReturn = WaitForAsrJob -TempAsrJob $TempASRJob
         Write-Output "Secondary Container Mapping Creation: $($containerMappingReturn)"
