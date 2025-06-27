@@ -9,17 +9,19 @@ $task = {
     param(
         $vm,
         $wrkdir
-        )
+    )
     Write-Host "Starting Job for" $vm.Name 
     try {
         $ErrorActionPreference = "Stop"
-    Set-Location $wrkdir 
+        Set-Location $wrkdir 
+        # Use $PSDefaultParameterValues['command:parameter'] = $value to pass value to common parameters
 
-    Start-Sleep -Seconds 11
-    Write-Error "This is an error to be printed"
-    Get-Item "C:\NonExistentFile2.txt" -ErrorAction Stop
+        Start-Sleep -Seconds 11
+        Write-Error "This is an error to be printed"
+        Get-Item "C:\NonExistentFile2.txt" -ErrorAction Stop
 
-    } catch {
+    }
+    catch {
         throw "An Error Occurred: $($_.Exception.Message)"
     }
     Write-Host "Finished Job for" $vm.Name
@@ -36,13 +38,14 @@ while ($attempt -le $maxAttempt) {
         if (($Global:failedJobs | Measure-Object).Count -ge 0) {
             if ((Test-Path "./failedJobError.csv") -and (Get-Item "./failedJobError.csv").Length -ge 12) {
                 $resp = Read-Host "Want to Attempt again. Only yes is acceptable response"
-                if ($resp -in @("yes","y")) {
+                if ($resp -in @("yes", "y")) {
                     Write-Host Your response is positive i.e $resp
                     Write-Host Attempt $attempt with a delay of($delay * ($attempt)) Seconds
                     $vms = Import-Csv -Path "./failedJobError.csv" 
                     Start-Sleep -Seconds ($delay * ($attempt))
                     $attempt++
-                } else {
+                }
+                else {
                     break; break;
                 }
                 

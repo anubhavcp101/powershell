@@ -1,6 +1,6 @@
 #
 $maxJobCount = 11
-$vms = Import-Csv -Path "./vms.csv" -Header "Name"
+$filePath = "./vms.csv"
 $task = {
     param(
         $vm,
@@ -8,58 +8,63 @@ $task = {
     #
     Write-Host "Starting Job for" $vm.Name 
     Set-Location $wrkdir 
-
-    function createASRRecoveryPlan {
-        param (
-            [string]$recoveryPlanName,
-            [string[]]$vmList,
-            [string]$primaryRegion = "",
-            [string]$recoveryRegion = "",
-            [string]$vaultName,
-            [string]$subscription
-        )
+    try {
+        $ErrorActionPreference = "Stop"
+        function createASRRecoveryPlan {
+            param (
+                [string]$recoveryPlanName,
+                [string[]]$vmList,
+                [string]$primaryRegion = "",
+                [string]$recoveryRegion = "",
+                [string]$vaultName,
+                [string]$subscription
+            )
         
-        $ErrorActionPreference = 'Stop'
+            $ErrorActionPreference = 'Stop'
 
-        $tex = """" + ($vmList -join """,""") + """"
-        $replquery = '
+            $tex = """" + ($vmList -join """,""") + """"
+            $replquery = '
     recoveryservicesresources
     | where type == "microsoft.recoveryservices/vaults/replicationfabrics/replicationprotectioncontainers/replicationprotecteditems"
     | project vm = properties.friendlyName, vault = split(id,"/")[-7], fabric =split(id,"/")[-5], container = split(id,"/")[-3], subscriptionId
     | where vm in~ ('+ $tex + ')
     '
     
-        $replres = Search-AzGraph -query $replquery -usetenantscope -first 1000
-        $rpis = @()
-        $replres | ForEach-Object {
-            Set-AzContext -SubscriptionId $_.subscriptionId
-            $vault = Get-AzRecoveryServicesVault -Name $_.vault
+            $replres = Search-AzGraph -Query $replquery -UseTenantScope -First 1000
+            $rpis = @()
+            $replres | ForEach-Object {
+                Set-AzContext -SubscriptionId $_.subscriptionId
+                $vault = Get-AzRecoveryServicesVault -Name $_.vault
+                Set-AzRecoveryServicesAsrVaultContext -Vault $vault
+                $fab = Get-AzRecoveryServicesAsrFabric -Name $_.fabric
+                $container = Get-AzRecoveryServicesAsrProtectionContainer -Name $_.container -Fabric $fab
+                $item = Get-AzRecoveryServicesAsrReplicationProtectedItem -FriendlyName $_.vm -ProtectionContainer $container
+                $rpis += $item
+            }
+    
+            # $ErrorActionPreference = 'Stop'
+            Set-AzContext -SubscriptionId $subscription
+            $vault = Get-AzRecoveryServicesVault -Name $vaultName
             Set-AzRecoveryServicesAsrVaultContext -Vault $vault
-            $fab = Get-AzRecoveryServicesAsrFabric -Name $_.fabric
-            $container = Get-AzRecoveryServicesAsrProtectionContainer -Name $_.container -Fabric $fab
-            $item = Get-AzRecoveryServicesAsrReplicationProtectedItem -FriendlyName $_.vm -ProtectionContainer $container
-            $rpis += $item
-        }
     
-        $ErrorActionPreference = 'Stop'
-        Set-AzContext -SubscriptionId $subscription
-        $vault = Get-AzRecoveryServicesVault -Name $vaultName
-        Set-AzRecoveryServicesAsrVaultContext -Vault $vault
+            $primaryFabric = Get-AzRecoveryServicesAsrFabric | where-object { $_.fabricSpecificDetails.Location -like $primaryRegion -or $_.fabricSpecificDetails.Location -like $primaryRegion.tolower().replace(' ', '') }
+            $recoveryFabric = Get-AzRecoveryServicesAsrFabric | where-object { $_.fabricSpecificDetails.Location -like $recoveryRegion -or $_.fabricSpecificDetails.Location -like $recoveryRegion.tolower().replace(' ', '') }
     
-        $primaryFabric = Get-AzRecoveryServicesAsrFabric | where-object { $_.fabricSpecificDetails.Location -like $primaryRegion -or $_.fabricSpecificDetails.Location -like $primaryRegion.replace(' ', '') }
-        $recoveryFabric = Get-AzRecoveryServicesAsrFabric | where-object { $_.fabricSpecificDetails.Location -like $recoveryRegion -or $_.fabricSpecificDetails.Location -like $recoveryRegion.replace(' ', '') }
-    
-        $outputJob = New-AzRecoveryServicesAsrRecoveryPlan -Name $recoveryPlanName -PrimaryFabric $primaryFabric -RecoveryFabric $recoveryFabric -ReplicationProtectedItem $rpis
+            $outputJob = New-AzRecoveryServicesAsrRecoveryPlan -Name $recoveryPlanName -PrimaryFabric $primaryFabric -RecoveryFabric $recoveryFabric -ReplicationProtectedItem $rpis
         
-        while (($outputJob.State -eq "InProgress") -or ($outputJob.State -eq "NotStarted")) {
-            Start-Sleep -Seconds 30
-            $outputJob = Get-AzRecoveryServicesAsrJob -Job $outputJob
+            while (($outputJob.State -eq "InProgress") -or ($outputJob.State -eq "NotStarted")) {
+                Start-Sleep -Seconds 30
+                $outputJob = Get-AzRecoveryServicesAsrJob -Job $outputJob
+            }
+            return $outputJob.StateDescription
         }
-        return $outputJob.StateDescription
+    
+        $jobStateDescription = createASRRecoveryPlan -recoveryPlanName $vm.Name.trim()  -vaultName $vm.vault.trim() -subscription $vm.subscription.trim() -vmList ($vm.vmList.trim() -split ",")
     }
-    
-    $jobStateDescription = createASRRecoveryPlan -recoveryPlanName $vm.Name  -vaultName $vm.vault -subscription $vm.subscription -vmList ($vm.vmList -split ",")
-    
+    catch {
+        throw "An Error Occurred: $($_.Exception.Message)"
+    }
+
     Write-Host "Finished Job for" $vm.Name
 }
 #
@@ -68,7 +73,9 @@ $Global:jobCounter = 0
 $Global:totalJobs = 0
 $Global:jobErrors = ""
 $Global:errorFile = @()
+Set-Location $PSScriptRoot
 $wrkdir = $PSScriptRoot
+$vms = Import-Csv -Path $filePath
 
 
 $Global:totalJobs = ($vms | Measure-Object).Count
@@ -101,11 +108,18 @@ while ($true) {
             Start-Sleep -Seconds 30
         }
         else {
+            Start-Transcript -Path "./allJobs.txt" -Force
+            $Global:jobs | ForEach-Object {
+                    ($_ | Select-Object Id, Name, State, HasMoreData | Format-Table -AutoSize -HideTableHeaders)
+                $jobDetails = (Receive-Job -Job $_ -Keep) 
+                Write-Host $jobDetails
+            }
+            Stop-Transcript
             $failedJobs = $Global:jobs | where State -EQ "Failed" | where HasMoreData -EQ $true
             if (($failedJobs | Measure-Object).Count -gt 0) {
                 Write-Host Following Jobs Failed. Please Check
                 Write-Host ($failedJobs | Measure-Object).Count jobs failed out of $Global:totalJobs jobs
-                $failedJobs | Select-Object Id, Name, State, HasMoreData | Format-Table -AutoSize -RepeatHeader
+                $failedJobs | Select-Object Id, Name, State | Format-Table -AutoSize -RepeatHeader
                 $failedJobs | Select-Object Id, Name, State | Export-Csv -Path "./listOfFailedJobs.csv" -NoTypeInformation -Force
                 # Start-Transcript -Path "./failedJobs.txt" -Force
                 "jobName,Error" | Out-File -FilePath "./failedJobError.csv" -Force

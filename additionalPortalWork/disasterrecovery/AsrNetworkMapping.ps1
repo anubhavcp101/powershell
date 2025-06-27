@@ -13,6 +13,9 @@ $vault = Get-AzRecoveryServicesVault -Name $vaultName
 #
 Set-AzRecoveryServicesAsrVaultContext -Vault $vault
 
+$primaryRegion = (Get-AzLocation | Where Location -like $primaryRegion.tolower().replace(' ','')).DisplayName
+$secondaryRegion = (Get-AzLocation | Where Location -like $secondaryRegion.tolower().replace(' ','')).DisplayName
+
 $primaryfabric = Get-AzRecoveryServicesAsrFabric | Where-Object { $_.FriendlyName -like $primaryRegion } # "East US" or "West US 3"
 $secondaryfabric = Get-AzRecoveryServicesAsrFabric | Where-Object { $_.FriendlyName -like $secondaryRegion } # "East US" or "West US 3"
 
@@ -104,14 +107,15 @@ function configureAsrNetworkMapping {
         $vm = Get-AzVM -ResourceId $primaryVMId -DefaultProfile $vmCtx
 
         $ctx = Set-AzContext -Subscription $vaultSubscription
-        $PSDefaultParameterValues['*:DefaultProfile'] = $ctx
+        # $PSDefaultParameterValues['*:DefaultProfile'] = $ctx
         $vault = Get-AzRecoveryServicesVault -Name $vaultName
         Set-AzRecoveryServicesAsrVaultContext -Vault $vault
 
         $primaryFabric = Get-AzRecoveryServicesAsrFabric | Where-Object { ($_.FabricSpecificDetails.Location -like $primaryRegion) -or ($_.FabricSpecificDetails.Location -like $primaryRegion.replace(' ', '').tolower()) }
         $secondaryFabric = Get-AzRecoveryServicesAsrFabric | Where-Object { ($_.FabricSpecificDetails.Location -like $secondaryRegion) -or ($_.FabricSpecificDetails.Location -like $secondaryRegion.replace(' ', '').tolower()) }
 
-        $networkMappings = Get-AzRecoveryServicesAsrNetworkMapping -PrimaryFabric $primaryFabric
+        $primNetworkMappings = Get-AzRecoveryServicesAsrNetworkMapping -PrimaryFabric $primaryFabric
+        $seconNetworkMappings = Get-AzRecoveryServicesAsrNetworkMapping -PrimaryFabric $secondaryFabric
 
         $isPrimaryNetworkMappingPresent = $false
         $isRecoveryNetworkMappingPresent = $false
@@ -137,22 +141,36 @@ function configureAsrNetworkMapping {
         $primaryVnetId = $vnetPieces[0 .. ($vnetPieces.Length - 3)] -join "/"
 
 
-        foreach ($mapping in $networkMappings) {
+        # foreach ($mapping in $networkMappings) {
         
+        #     if (($mapping.PrimaryNetworkFriendlyName -eq $primaryVnetName) -and ($mapping.RecoveryNetworkFriendlyName -eq $recoveryVnet) -and ($mapping.FabricSpecificNetworkMappingDetails.PrimaryNetworkLocation -eq $primaryRegion.replace(' ', '').tolower()) -and ($mapping.FabricSpecificNetworkMappingDetails.RecoveryNetworkLocation -eq $secondaryRegion.replace(' ', '').tolower())) {
+        #         $isPrimaryNetworkMappingPresent = $true
+
+        #     }
+
+        #     if (($mapping.PrimaryNetworkFriendlyName -eq $recoveryVnet) -and ($mapping.RecoveryNetworkFriendlyName -eq $primaryVnetName) -and ($mapping.FabricSpecificNetworkMappingDetails.PrimaryNetworkLocation -eq $secondaryRegion.replace(' ', '').tolower()) -and ($mapping.FabricSpecificNetworkMappingDetails.RecoveryNetworkLocation -eq $primaryRegion.replace(' ', '').tolower())) {
+        #         $isRecoveryNetworkMappingPresent = $true
+
+        #     }
+
+        #     if ($isPrimaryNetworkMappingPresent -and $isRecoveryNetworkMappingPresent) {
+        #         break
+        #     }
+
+        # }
+
+        foreach ($mapping in $primNetworkMappings) {
             if (($mapping.PrimaryNetworkFriendlyName -eq $primaryVnetName) -and ($mapping.RecoveryNetworkFriendlyName -eq $recoveryVnet) -and ($mapping.FabricSpecificNetworkMappingDetails.PrimaryNetworkLocation -eq $primaryRegion.replace(' ', '').tolower()) -and ($mapping.FabricSpecificNetworkMappingDetails.RecoveryNetworkLocation -eq $secondaryRegion.replace(' ', '').tolower())) {
                 $isPrimaryNetworkMappingPresent = $true
-
-            }
-
-            if (($mapping.PrimaryNetworkFriendlyName -eq $recoveryVnet) -and ($mapping.RecoveryNetworkFriendlyName -eq $primaryVnetName) -and ($mapping.FabricSpecificNetworkMappingDetails.PrimaryNetworkLocation -eq $secondaryRegion.replace(' ', '').tolower()) -and ($mapping.FabricSpecificNetworkMappingDetails.RecoveryNetworkLocation -eq $primaryRegion.replace(' ', '').tolower())) {
-                $isRecoveryNetworkMappingPresent = $true
-
-            }
-
-            if ($isPrimaryNetworkMappingPresent -and $isRecoveryNetworkMappingPresent) {
                 break
             }
+        }
 
+        foreach ($mapping in $seconNetworkMappings) {
+            if (($mapping.PrimaryNetworkFriendlyName -eq $recoveryVnet) -and ($mapping.RecoveryNetworkFriendlyName -eq $primaryVnetName) -and ($mapping.FabricSpecificNetworkMappingDetails.PrimaryNetworkLocation -eq $secondaryRegion.replace(' ', '').tolower()) -and ($mapping.FabricSpecificNetworkMappingDetails.RecoveryNetworkLocation -eq $primaryRegion.replace(' ', '').tolower())) {
+                $isRecoveryNetworkMappingPresent = $true
+                break
+            }
         }
 
         function WaitForAsrJob {
@@ -172,21 +190,25 @@ function configureAsrNetworkMapping {
         $secondaryReturn = $isRecoveryNetworkMappingPresent
 
         if (-not $isPrimaryNetworkMappingPresent) {
+            $networkMappingsName = "$()-$()-$()-$()"
             $TempASRJob = New-AzRecoveryServicesAsrNetworkMapping -AzureToAzure `
                 -PrimaryFabric $primaryfabric `
                 -PrimaryAzureNetworkId $primaryVnetId `
                 -RecoveryFabric $secondaryfabric `
-                -RecoveryAzureNetworkId $recoveryVnetId
+                -RecoveryAzureNetworkId $recoveryVnetId `
+                -Name $networkMappingsName
         
             $primaryReturn = WaitForAsrJob -TempAsrJob $TempASRJob
         }
 
         if (-not $isRecoveryNetworkMappingPresent) {
+            $networkMappingsName = "$()-$()-$()-$()"
             $TempASRJob = New-AzRecoveryServicesAsrNetworkMapping -AzureToAzure `
                 -PrimaryFabric $secondaryfabric `
                 -PrimaryAzureNetworkId $recoveryVnetId `
-                -RecoveryFabric $primaryRegion `
-                -RecoveryAzureNetworkId $primaryVnetId
+                -RecoveryFabric $primaryfabric `
+                -RecoveryAzureNetworkId $primaryVnetId `
+                -Name $networkMappingsName
 
             $secondaryReturn = WaitForAsrJob -TempAsrJob $TempASRJob
         }
@@ -210,7 +232,7 @@ foreach ($vm in $vms) {
         -primaryRegion $vm.primaryRegion.trim() `
         -secondaryRegion $vm.secondaryRegion.trim() `
         -recoveryVnetId $vm.recoveryVnetId.trim()
-    "$(($primaryVMId -split "/")[-1]),$($out)" | Out-File -FilePath "./output.csv" -Append -Force
+    "$(($vm.primaryVMId -split "/")[-1]),$($out)" | Out-File -FilePath "./output.csv" -Append -Force
 }
 
 # Start-Process powershell -ArgumentList "-NoExit", "Get-Content './output.csv' -Wait"

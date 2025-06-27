@@ -9,7 +9,7 @@ $task = {
     Write-Host "Starting Job for" $vm.Name 
     try {
         $ErrorActionPreference = "Stop"
-    
+        # Use $PSDefaultParameterValues['command:parameter'] = $value to pass value to common parameters
         Set-Location $wrkdir 
 
         Start-Sleep -Seconds 11
