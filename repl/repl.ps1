@@ -85,7 +85,7 @@ function ConfigureAsr {
     }
     $protContainer = $rightContainer
 
-    $primaryContainerMapping = Get-AzRecoveryServicesAsrProtectionContainerMapping -ProtectionContainer $protContainer | where PolicyFriendlyName -eq $policyName | where SourceFabricFriendlyName -eq $primaryLocation
+    $primaryContainerMapping = Get-AzRecoveryServicesAsrProtectionContainerMapping -ProtectionContainer $protContainer | where PolicyFriendlyName -eq $policyName | where SourceFabricFriendlyName -eq $primaryLocation | where TargetFabricFriendlyName -eq $recoveryRegion
 
     # $recoveryRG = Get-AzResource -ResourceId $recoveryRGId
 
