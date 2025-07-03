@@ -25,7 +25,7 @@ recoveryservicesresources
         $replres = Search-AzGraph -query $replquery -UseTenantScope
 
         $ctx = Set-AzContext -SubscriptionId $replres.subscriptionId
-        $PSDefaultParameterValues['*:DefaultProfile'] = $ctx
+        # $PSDefaultParameterValues['*:DefaultProfile'] = $ctx
         $vault = Get-AzRecoveryServicesVault -Name $replres.vault
         #
         Set-AzRecoveryServicesAsrVaultContext -Vault $vault
@@ -100,7 +100,7 @@ while ($true) {
             if (($failedJobs | Measure-Object).Count -gt 0) {
                 Write-Host Following Jobs Failed. Please Check
                 Write-Host ($failedJobs | Measure-Object).Count jobs failed out of $Global:totalJobs jobs
-                $failedJobs | Select-Object Id, Name, State, HasMoreData | Format-Table -AutoSize -RepeatHeader
+                $failedJobs | Select-Object Id, Name, State | Format-Table -AutoSize -RepeatHeader
                 $failedJobs | Select-Object Id, Name, State | Export-Csv -Path "./listOfFailedJobs.csv" -NoTypeInformation -Force
                 # Start-Transcript -Path "./failedJobs.txt" -Force
                 "jobName,Error" | Out-File -FilePath "./failedJobError.csv" -Force
