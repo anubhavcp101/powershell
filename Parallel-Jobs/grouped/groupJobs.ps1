@@ -1,4 +1,21 @@
 #
+$tasky = {
+    param(
+        $vm,
+        $wrkdir)
+    Write-Host "Starting Job for" $vm.Name 
+    Set-Location $wrkdir 
+    #
+    Start-Sleep -Seconds 11
+    # if((Get-Random -Maximum 6 -Minimum 2) -in @(2,4)){
+    Get-Item "C:\NonExist.txt" -ErrorAction Stop
+    # }
+    #
+}
+$filepath = "./vm.csv"
+$groupingProperty = "subscription"
+
+
 function runParallelTask {
     param (
         [int]$maxJob = 11,
@@ -90,24 +107,12 @@ function runParallelTask {
     }
 }
 
-$tasky = {
-    param(
-        $vm,
-        $wrkdir)
-    Write-Host "Starting Job for" $vm.Name 
-    Set-Location $wrkdir 
-    Start-Sleep -Seconds 11
-    # if((Get-Random -Maximum 6 -Minimum 2) -in @(2,4)){
-
-    Get-Item "C:\NonExist.txt" -ErrorAction Stop
-    # }
-}
 
 
 Set-Location $PSScriptRoot
-$allVms = Import-Csv -Path "./vm.csv"
+$allVms = Import-Csv -Path $filepath
 
-$VmGroups = $allVms | Group-Object -Property "subscription"
+$VmGroups = $allVms | Group-Object -Property $groupingProperty
 
 foreach ($VmGroup in $VmGroups) {
     Write-Output "Starting for $($VmGroup.Name)"
