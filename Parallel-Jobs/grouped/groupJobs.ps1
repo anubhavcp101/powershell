@@ -12,6 +12,7 @@ $tasky = {
     # }
     #
 }
+$jobsToRun = 9
 $filepath = "./vm.csv"
 $groupingProperty = "subscription"
 
@@ -116,7 +117,7 @@ $VmGroups = $allVms | Group-Object -Property $groupingProperty
 
 foreach ($VmGroup in $VmGroups) {
     Write-Output "Starting for $($VmGroup.Name)"
-    runParallelTask -maxJob 9 -taskScript $tasky -vms $VmGroup.Group
+    runParallelTask -maxJob $jobsToRun -taskScript $tasky -vms $VmGroup.Group
     Start-Sleep -Seconds 11
 }
 # all job transcript, re-arrange, 
