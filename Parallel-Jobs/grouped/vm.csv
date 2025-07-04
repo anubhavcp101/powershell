@@ -1,0 +1,15 @@
+Name,resourceGroup,subscription
+vm-aurora,rg-indigo-cloud,sub-alpha
+vm-ember,rg-indigo-lake,sub-alpha
+vm-onyx,rg-indigo-breeze,sub-alpha
+vm-ruby,rg-cobalt-peak,sub-beta
+vm-sage,rg-cobalt-frost,sub-beta
+vm-dusk,rg-cobalt-horizon,sub-beta
+vm-pearl,rg-amber-dawn,sub-gamma
+vm-moss,rg-amber-dusk,sub-gamma
+vm-ivory,rg-amber-hill,sub-gamma
+vm-coral,rg-indigo-breeze,sub-alpha
+vm-fern,rg-cobalt-frost,sub-beta
+vm-fern2,rg-cobalt-frost,sub-beta
+vm-fern3,rg-cobalt-frost,sub-beta
+vm-fern4,rg-cobalt-frost,sub-beta
