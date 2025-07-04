@@ -20,9 +20,9 @@ $groupingProperty = "subscription"
 function runParallelTask {
     param (
         [int]$maxJob = 11,
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory = $true)]
         $vms,
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory = $true)]
         #
         [ScriptBlock]$taskScript,
         [int]$jobDelay = 30,
@@ -75,16 +75,23 @@ function runParallelTask {
                 Start-Sleep -Seconds $jobDelay
             }
             else {
+                Start-Transcript -Path "./allJobs.txt" -Force -Append
+                $Global:jobs | ForEach-Object {
+                    ($_ | Select-Object Id, Name, State, HasMoreData | Format-Table -AutoSize -HideTableHeaders)
+                    $jobDetails = (Receive-Job -Job $_ -Keep) 
+                    Write-Host $jobDetails
+                }
+                Stop-Transcript
                 $failedJobs = $Global:jobs | where State -EQ "Failed" | where HasMoreData -EQ $true
                 if (($failedJobs | Measure-Object).Count -gt 0) {
                     Write-Host Following Jobs Failed. Please Check
                     Write-Host ($failedJobs | Measure-Object).Count jobs failed out of $Global:totalJobs jobs
                     $failedJobs | Select-Object Id, Name, State, HasMoreData | Format-Table -AutoSize -RepeatHeader
-                    $failedJobs | Select-Object Id, Name, State | Export-Csv -Path "./listOfFailedJobs.csv" -NoTypeInformation -Force
+                    $failedJobs | Select-Object Id, Name, State | Export-Csv -Path "./listOfFailedJobs.csv" -NoTypeInformation -Force -Append
                     # Start-Transcript -Path "./failedJobs.txt" -Force
-                    "jobName,Error" | Out-File -FilePath $errFilePath -Force
+                    "jobName,Error" | Out-File -FilePath $errFilePath -Force -Append
                     $failedJobs | ForEach-Object {
-                    ($_ | Select-Object Id, Name, State, HasMoreData | Format-Table -AutoSize -HideTableHeaders)
+                        ($_ | Select-Object Id, Name, State, HasMoreData | Format-Table -AutoSize -HideTableHeaders)
                         # $errorDetails = (Receive-Job -Job $_ -Keep) 
                         $errorDetails = $_.ChildJobs.JobStateInfo.Reason -join ";"
                         Write-Host $errorDetails
