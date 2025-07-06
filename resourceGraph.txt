@@ -121,6 +121,28 @@ resources
 | project name, osDisk, datadiskSize = dataDisk.diskSizeGB
 | summarize allDataDisk = strcat_array(make_list(datadiskSize),", ") by name
 
+// To get DR Details of VMs
+resources
+| where type == "microsoft.compute/virtualmachines"
+| where location != "<DR_Region like westus>"
+| project name = tolower(name), primaryVmId = id
+| join kind=inner (recoveryservicesresources
+| where type == "microsoft.recoveryservices/vaults/replicationfabrics/replicationprotectioncontainers/replicationprotecteditems"
+| project VM = tolower(tostring(properties.friendlyName)),
+vaultSubscription = split(id, "/")[2],
+vaultName = split(id, "/")[-7],
+policyName = properties.policyName,
+primaryRegion = properties.primaryFabricFriendlyName,
+recoveryRegion = properties.recoveryFabricFriendlyName,
+recoveryRGId = properties.providerSpecificDetails.recoveryAzureResourceGroupId,
+cacheStorageAccountId = properties.providerSpecificDetails.protectedManagedDisks[0].primaryStagingAzureStorageAccountId,
+recoveryDiskEncryptionSetId = properties.providerSpecificDetails.protectedManagedDisks[0].recoveryDiskEncryptionSetId,
+failoverVnetId = properties.providerSpecificDetails.vmNics[0].recoveryVMNetworkId,
+failoverSubnetName = properties.providerSpecificDetails.vmNics[0].ipConfigs[0].recoverySubnetName
+) on $left.name == $right.VM
+| project-away VM
+| where VM in~ ("vm-A","vm-B")
+
 
 // --------------------------------
 
