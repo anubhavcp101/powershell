@@ -39,7 +39,7 @@ recoveryservicesresources
 
     $failoverSubnetName = $vm.failoverSubnet.trim()
     
-    $oldNicConfig = $item.NicDetails[0]
+    $oldNicConfig = $item.NicDetailsList[0]
 
     if ( -not $failoverSubnetName) {
       $failoverSubnetName = $oldNicConfig.IpConfigs[0].RecoverySubnetName
