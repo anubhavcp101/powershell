@@ -141,7 +141,7 @@ failoverVnetId = properties.providerSpecificDetails.vmNics[0].recoveryVMNetworkI
 failoverSubnetName = properties.providerSpecificDetails.vmNics[0].ipConfigs[0].recoverySubnetName
 ) on $left.name == $right.VM
 | project-away VM
-| where VM in~ ("vm-A","vm-B")
+| where name in~ ("vm-A","vm-B")
 
 
 // --------------------------------
