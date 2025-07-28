@@ -143,6 +143,13 @@ failoverSubnetName = properties.providerSpecificDetails.vmNics[0].ipConfigs[0].r
 | project-away VM
 | where name in~ ("vm-A","vm-B")
 
+// To get replicated VMs having Configuration Issues
+recoveryservicesresources
+| where type == "microsoft.recoveryservices/vaults/replicationfabrics/replicationprotectioncontainers/replicationprotecteditems"
+| project id, VM = tostring(properties.friendlyName), Errors = properties.healthErrors
+| mv-expand Errors
+| project id, VM, errorCategory = Errors.errorCategory, errorCode = Errors.errorCode, errorMessage = Errors.errorMessage, possibleCauses = Errors.possibleCauses
+| where errorCategory == "Configuration"
 
 // --------------------------------
 
