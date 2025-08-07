@@ -151,5 +151,13 @@ recoveryservicesresources
 | project id, VM, errorCategory = Errors.errorCategory, errorCode = Errors.errorCode, errorMessage = Errors.errorMessage, possibleCauses = Errors.possibleCauses
 | where errorCategory == "Configuration"
 
+// To get disk and its LUN number
+resources
+| where type == "microsoft.compute/virtualmachines"
+| where name startswith "azw-am1ss"
+| project name, resourceGroup, subscriptionId, Datadisks = properties.storageProfile.dataDisks
+| mv-expand Datadisks
+| project name, DiskName = Datadisks.name, Lun = Datadisks.lun, Disktype = Datadisks.managedDisk.storageAccountType
+
 // --------------------------------
 
