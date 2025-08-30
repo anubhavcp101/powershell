@@ -159,5 +159,11 @@ resources
 | mv-expand Datadisks
 | project name, DiskName = Datadisks.name, Lun = Datadisks.lun, Disktype = Datadisks.managedDisk.storageAccountType
 
+// To get replicated VMs showing Failover Completed Status
+recoveryservicesresources
+| where type == "microsoft.recoveryservices/vaults/replicationfabrics/replicationprotectioncontainers/replicationprotecteditems"
+| where properties.protectionStateDescription == "Failover completed" or properties.providerSpecificDetails.vmProtectionStateDescription == "Failover completed"
+| project VM = tolower(tostring(properties.friendlyName))
+
 // --------------------------------
 
