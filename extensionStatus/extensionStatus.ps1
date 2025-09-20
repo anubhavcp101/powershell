@@ -38,10 +38,6 @@ $task = {
             Write-Error $vmname Not found
         }
 
-
-        Start-Sleep -Seconds 11
-        Write-Error "This is an error to be printed"
-        Get-Item "C:\NonExistentFile2.txt" -ErrorAction Stop
     }
     catch {
         throw "An Error Occurred: $($_.Exception.Message)"
