@@ -24,11 +24,5 @@ Register-ScheduledJob -Name "CompressTask-$(Get-Date -Format 'dd-MM-yyyy-hh-mm')
 # Run once but every 12hrs for next 36hrs 
 Register-ScheduledJob -Name "CompressTask-$(Get-Date -Format 'dd-MM-yyyy-hh-mm')" -ScriptBlock $compressTask -Trigger (New-JobTrigger -Once -At ((Get-Date).AddMinutes(3)) -RepetitionInterval (New-TimeSpan -Hours 12) -RepetitionDuration (New-TimeSpan -Hours 36) )
 
-$test = {
-    "$(Get-Date)" | Out-File -FilePath "C:\Users\yashw\OneDrive\Desktop\powershell\powershell\test.txt" -Append -Force
-}
-Register-ScheduledJob -Name "Test-$(Get-Date -Format 'dd-MM-yyyy-hh-mm')" -ScriptBlock $test -Trigger (New-JobTrigger -Once -At ((Get-Date).AddMinutes(3)) -RepetitionInterval (New-TimeSpan -Hours 2) -RepetitionDuration (New-TimeSpan -Hours 6) )
-
-
 
 
