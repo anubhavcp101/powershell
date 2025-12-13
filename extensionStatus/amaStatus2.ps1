@@ -56,8 +56,7 @@ $wrkdir = $PSScriptRoot
 $vms = Import-Csv -Path $filePath #-Header "Name"
 
 $outFolderName = "Output-$(Get-Date -Format 'dd-MM-yyyy-hh-mm')"
-
-$newFolder = New-Item -Path . -Name $outFolderName -ItemType Directory -Force | Out-Null
+$newFolder = New-Item -Path . -Name "$outFolderName" -ItemType Directory -Force | Out-Null
 Write-Output "The Output Folder is at : $($newFolder.FullName)"
 
 
