@@ -1,5 +1,5 @@
 #
-$filePath = "./vms.csv"
+$filePath = "C:\Users\yashw\OneDrive\Desktop\powershell\powershell\vms.csv"
 $maxJobCount = 11
 $task = {
     param(
@@ -33,6 +33,13 @@ $vms = Import-Csv -Path $filePath #-Header "Name"
 
 $folderName = "Run-$(Get-Date -Format 'dd-MM-yyyyThh-mm')"
 New-Item -Path "$($wrkdir)\$($folderName)" -ItemType Directory -Force | Out-Null
+New-Item -Path "$($wrkdir)\$($folderName)\outputXml" -ItemType Directory -Force | Out-Null
+
+#<> Top 5 Failed Jobs
+$failedJobsCountToShow = 5
+$currentShowedFailedJobCount = 0
+$showedFailedJobs = @()
+#<>
 
 
 $Global:totalJobs = ($vms | Measure-Object).Count
@@ -65,17 +72,32 @@ while ($true) {
             ###
             $currentJobs | ForEach-Object {
                 Receive-Job -Keep -Job $_ *>&1 | Out-File -Force -FilePath "$($folderName)\$($_.Name).txt" -ErrorVariable outFileError
+                Receive-Job -Keep -Job $_ *>&1 | Export-Clixml -Depth 3 -Force -Path "$($folderName)\outputXml\$($_.Name).xml" 
                 if ($outFileError) {
                     Receive-Job -Keep -Job $_ *>&1 | Out-File -Force -FilePath "$($folderName)\$($_.Name)-$(Get-Date -Format 'dd-MM-yyyyThh-mm-ss').txt"
                 }
             }
             ###
+            #<>
+            $currentlyFailedJobs = $Global:jobs | where State -eq "Failed" | where HasMoreData -eq $true
+            if (($currentShowedFailedJobCount -lt $failedJobsCountToShow) -and (($currentlyFailedJobs) | Measure-Object).Count -gt 0) {
+                $notShownFailedJobs = $currentlyFailedJobs | Where-Object { $_.Name -notin $showedFailedJobs } 
+                for ($ind = 0; (($notShownFailedJobs.Length -gt 0) -and ($ind -lt $notShownFailedJobs.Length) -and ($currentShowedFailedJobCount -lt $failedJobsCountToShow)); $ind++) {
+                    $currentShowedFailedJobCount++
+                    $showedFailedJobs += $notShownFailedJobs[$ind].Name
+                    $showPath = "$($folderName)\$($notShownFailedJobs[$ind].Name).txt"
+                    $co = "Write-Output 'FilePath: $($showPath)`n`n';Get-Content '$($showPath)'"
+                    Start-Process powershell.exe -ArgumentList "-NoExit", "-Command", $co
+                }
+            }
+            #<>
             Start-Sleep -Seconds 30
         }
         else {
             ###
             $Global:jobs | ForEach-Object {
                 Receive-Job -Keep -Job $_ *>&1 | Out-File -Force -FilePath "$($folderName)\$($_.Name).txt" -ErrorVariable outFileError
+                Receive-Job -Keep -Job $_ *>&1 | Export-Clixml -Depth 3 -Force -Path "$($folderName)\outputXml\$($_.Name).xml" 
                 if ($outFileError) {
                     Receive-Job -Keep -Job $_ *>&1 | Out-File -Force -FilePath "$($folderName)\$($_.Name)-$(Get-Date -Format 'dd-MM-yyyyThh-mm-ss').txt"
                 }
@@ -118,11 +140,25 @@ while ($true) {
         ###
         $currentJobs | ForEach-Object {
             Receive-Job -Keep -Job $_ *>&1 | Out-File -Force -FilePath "$($folderName)\$($_.Name).txt" -ErrorVariable outFileError
+            Receive-Job -Keep -Job $_ *>&1 | Export-Clixml -Depth 3 -Force -Path "$($folderName)\outputXml\$($_.Name).xml" 
             if ($outFileError) {
                 Receive-Job -Keep -Job $_ *>&1 | Out-File -Force -FilePath "$($folderName)\$($_.Name)-$(Get-Date -Format 'dd-MM-yyyyThh-mm-ss').txt"
             }
         }
         ###
+        #<>
+        $currentlyFailedJobs = $Global:jobs | where State -eq "Failed" | where HasMoreData -eq $true
+        if (($currentShowedFailedJobCount -lt $failedJobsCountToShow) -and (($currentlyFailedJobs) | Measure-Object).Count -gt 0) {
+            $notShownFailedJobs = $currentlyFailedJobs | Where-Object { $_.Name -notin $showedFailedJobs } 
+            for ($ind = 0; (($notShownFailedJobs.Length -gt 0) -and ($ind -lt $notShownFailedJobs.Length) -and ($currentShowedFailedJobCount -lt $failedJobsCountToShow)); $ind++) {
+                $currentShowedFailedJobCount++
+                $showedFailedJobs += $notShownFailedJobs[$ind].Name
+                $showPath = "$($folderName)\$($notShownFailedJobs[$ind].Name).txt"
+                $co = "Write-Output 'FilePath: $($showPath)`n`n';Get-Content '$($showPath)'"
+                Start-Process powershell.exe -ArgumentList "-NoExit", "-Command", $co
+            }
+        }
+        #<>
         $currentJobs | Select-Object Id, Name, State, HasMoreData | Format-Table -AutoSize -RepeatHeader
         Start-Sleep -Seconds 30
     }
