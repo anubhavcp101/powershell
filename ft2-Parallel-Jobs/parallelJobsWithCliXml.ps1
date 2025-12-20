@@ -66,7 +66,7 @@ while ($true) {
             ###
             $currentJobs | ForEach-Object {
                 Receive-Job -Keep -Job $_ | Out-String | Out-File -Force -FilePath "$($folderName)\$($_.Name).txt" -ErrorVariable outFileError
-                Receive-Job -Keep -Job $_ | Export-Clixml -Force -Path "$($folderName)\outputXml\$($_.Name).txt" 
+                Receive-Job -Keep -Job $_ | Export-Clixml -Depth 3 -Force -Path "$($folderName)\outputXml\$($_.Name).xml" 
                 if ($outFileError) {
                     Receive-Job -Keep -Job $_ | Out-String | Out-File -FilePath "$($folderName)\$($_.Name)-$(Get-Date -Format 'dd-MM-yyyyThh-mm-ss').txt"
                 }
@@ -78,7 +78,7 @@ while ($true) {
             ###
             $Global:jobs | ForEach-Object {
                 Receive-Job -Keep -Job $_ | Out-String | Out-File -FilePath "$($folderName)\$($_.Name).txt" -ErrorVariable outFileError
-                Receive-Job -Keep -Job $_ | Export-Clixml -Force -Path "$($folderName)\outputXml\$($_.Name).txt" 
+                Receive-Job -Keep -Job $_ | Export-Clixml -Depth 3 -Force -Path "$($folderName)\outputXml\$($_.Name).xml" 
                 if ($outFileError) {
                     Receive-Job -Keep -Job $_ | Out-String | Out-File -Force -FilePath "$($folderName)\$($_.Name)-$(Get-Date -Format 'dd-MM-yyyyThh-mm-ss').txt"
                 }
@@ -121,7 +121,7 @@ while ($true) {
         ###
         $currentJobs | ForEach-Object {
             Receive-Job -Keep -Job $_ | Out-String | Out-File -FilePath "$($folderName)\$($_.Name).txt" -ErrorVariable outFileError
-            Receive-Job -Keep -Job $_ | Export-Clixml -Force -Path "$($folderName)\outputXml\$($_.Name).txt" 
+            Receive-Job -Keep -Job $_ | Export-Clixml -Depth 3 -Force -Path "$($folderName)\outputXml\$($_.Name).xml" 
             if ($outFileError) {
                 Receive-Job -Keep -Job $_ | Out-String | Out-File -Force -FilePath "$($folderName)\$($_.Name)-$(Get-Date -Format 'dd-MM-yyyyThh-mm-ss').txt"
             }
