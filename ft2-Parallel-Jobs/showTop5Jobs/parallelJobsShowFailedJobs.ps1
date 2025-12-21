@@ -13,7 +13,7 @@ $task = {
         Set-Location $wrkdir 
 
         Start-Sleep -Seconds 11
-        Write-Error "This is an error to be printed"
+        #Write-Error "This is an error to be printed"
         Get-Item "C:\NonExistentFile2.txt" -ErrorAction Stop
     }
     catch {
@@ -163,3 +163,4 @@ while ($true) {
         Start-Sleep -Seconds 30
     }
 }
+Get-ChildItem -Path "$($folderName)\outputXml\*.xml" | Select BaseName, @{Name="ErrMsg";Exp={Get-Item -Path $_.fullName | Import-Clixml | Where writeErrorStream -eq $true | Select -ExpandProperty TargetObject}} | Export-Csv -NoTypeInformation -Force -Path "$($folderName)\outputXml\error.csv"
