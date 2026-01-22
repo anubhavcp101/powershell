@@ -43,7 +43,7 @@ function runParaJobs {
     $Global:errorFile = @()
     $wrkdir = $PSScriptRoot
     Set-Location $PSScriptRoot
-    $vms = Import-Csv -Path $filePath #-Header "Name"
+    #$vms = Import-Csv -Path $filePath #-Header "Name"
 
     $folderName = "$($runName)\$($groupingName)"
     New-Item -Path "$($wrkdir)\$($folderName)" -ItemType Directory -Force | Out-Null
