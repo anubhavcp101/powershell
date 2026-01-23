@@ -159,16 +159,6 @@ function runParaJobs {
 
 }
 
-
-<#
-$Global:jobs += $job
-$localJobs += $job
-
-Silent the transcript 
-
-grouping 
-#>
-
 $RunName = "Run-$(Get-Date -Format 'dd-MM-yyyyThh-mm')"
 
 Set-Location $PSScriptRoot
