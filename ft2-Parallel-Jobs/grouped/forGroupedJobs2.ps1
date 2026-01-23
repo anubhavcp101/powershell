@@ -113,7 +113,7 @@ function runParaJobs {
                 }
                 Stop-Transcript
                 #>
-                # f-here
+                
                 $failedJobs = $localJobs | where State -EQ "Failed" | where HasMoreData -EQ $true
                 if (($failedJobs | Measure-Object).Count -gt 0) {
                     # Write-Host Following Jobs Failed. Please Check
