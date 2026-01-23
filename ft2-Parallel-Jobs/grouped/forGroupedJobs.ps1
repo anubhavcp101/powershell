@@ -1,19 +1,25 @@
 #
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+$filepath = "./vms.csv"
+$groupingProperty = "subscription"
+$jobsToRun = 9
+$task = {
+    param($vm,$wrkdir)
+    Write-Host "Starting Job for" $vm.Name 
+    #
+    try {
+        $ErrorActionPreference = "Stop"
+        # Use $PSDefaultParameterValues['command:parameter'] = $value to pass value to common parameters
+        Set-Location $wrkdir 
+        #
+        Start-Sleep -Seconds 11
+        Write-Error "This is an error to be printed"
+        Get-Item "C:\NonExistentFile2.txt" -ErrorAction Stop
+    }
+    catch {
+        throw "An Error Occurred: $($_.Exception.Message)"
+    }
+    Write-Host "Finished Job for" $vm.Name
+}
 
 
 
@@ -32,7 +38,6 @@ function runParaJobs {
     )
 
     #
-    #$filePath = "./vms.csv"
     $maxJobCount = $maxJob
     $task = $taskScript
     #
@@ -43,7 +48,6 @@ function runParaJobs {
     $Global:errorFile = @()
     $wrkdir = $PSScriptRoot
     Set-Location $PSScriptRoot
-    #$vms = Import-Csv -Path $filePath #-Header "Name"
 
     $folderName = "$($runName)\$($groupingName)"
     New-Item -Path "$($wrkdir)\$($folderName)" -ItemType Directory -Force | Out-Null
@@ -70,11 +74,11 @@ function runParaJobs {
             $Global:jobCounter++
         }
         elseif (($jobCounter) -eq $Global:totalJobs) {
-            Write-Host All Jobs Initiated
+            Write-Host "All Jobs Initiated for $($groupingName)"
             # wait for all jobs to be completed
             $currentJobs = $localJobs | where State -EQ "Running" | where HasMoreData -EQ $true
             if (($currentJobs | Measure-Object).Count -gt 0) {
-                Write-Host "Currently Waiting for all jobs to be finished"
+                Write-Host "Currently Waiting for the jobs to be finished"
                 Write-Host Currently Running Jobs are:
                 $currentJobs | Select-Object Id, Name, State, HasMoreData | Format-Table -AutoSize -RepeatHeader
                 ###
@@ -150,31 +154,6 @@ function runParaJobs {
 
 }
 
-#runParaJobs -maxJob 11 -vms $vms -taskScript $task
-
-$task = {
-    param(
-        $vm,
-        $wrkdir)
-    #
-    Write-Host "Starting Job for" $vm.Name 
-    try {
-        $ErrorActionPreference = "Stop"
-        # Use $PSDefaultParameterValues['command:parameter'] = $value to pass value to common parameters
-        Set-Location $wrkdir 
-
-        Start-Sleep -Seconds 11
-        Write-Error "This is an error to be printed"
-        Get-Item "C:\NonExistentFile2.txt" -ErrorAction Stop
-    }
-    catch {
-        throw "An Error Occurred: $($_.Exception.Message)"
-    }
-    Write-Host "Finished Job for" $vm.Name
-}
-#$vms = Import-Csv -Path "func4ParallelJob\vms.csv"
-
-#runParaJobs -maxJob 11 -taskScript $task -vms $vms
 
 <#
 $Global:jobs += $job
@@ -184,9 +163,7 @@ Silent the transcript
 
 grouping 
 #>
-$filepath = "./vms.csv"
-$groupingProperty = "subscription"
-$jobsToRun = 9
+
 
 $RunName = "Run-$(Get-Date -Format 'dd-MM-yyyyThh-mm')"
 Set-Location $PSScriptRoot
