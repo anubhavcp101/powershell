@@ -14,13 +14,13 @@ $task = {
 
 $initTask = {
     param (
-        $vm,
+        $tmpVm,
         $workdir
     )
     Set-Location $workdir
     $ErrorActionPreference = "Stop"
 
-    $vm.PSObject.Members | Where-Object {$_.MemberType -eq "NoteProperty"} | ForEach-Object { New-Variable -Name "$($_.Name)".Replace(' ','') -Value $_.Value}
+    $tmpVm.PSObject.Members | Where-Object {$_.MemberType -eq "NoteProperty"} | ForEach-Object { New-Variable -Name "$($_.Name)".Replace(' ','') -Value $_.Value}
 }
 
 $task = [scriptblock]::Create($initTask.ToString()+"`n"+$task.ToString())
