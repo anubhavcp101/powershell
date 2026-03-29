@@ -17,7 +17,7 @@ $task = {
         Get-Item "C:\NonExistentFile2.txt" -ErrorAction Stop
     }
     catch {
-        throw "An Error Occurred: $($PSItem.Exception.Message)"
+        throw "An Error Occurred: $($_.Exception.Message)"
     }
     Write-Host "Finished Job for" $vm.Name
 }
@@ -36,16 +36,10 @@ $Global:jobErrors = ""
 $Global:errorFile = @()
 $wrkdir = $PSScriptRoot
 Set-Location $PSScriptRoot
-
-if (Test-Path $filePath) {
-    $vms = Import-Csv -Path $filePath #-Header "Name"
-} else {
-    Write-Error "File not found. Please check the filepath: $($filePath)"
-    exit
-}
+$entries = Import-Csv -Path $filePath #-Header "Name"
 
 if ( (Test-Path Variable:\optionsToAdd) -and ($optionsToAdd.Count -gt 0)) {
-    foreach ($instance in $vms) {
+    foreach ($instance in $entries) {
         foreach ($key in $optionsToAdd.Keys) {
             $instance | Add-Member -NotePropertyName "$($key)".Replace(' ','') -NotePropertyValue "$($optionsToAdd[$key])"
         }
@@ -57,8 +51,8 @@ New-Item -Path "$($wrkdir)\$($folderName)" -ItemType Directory -Force | Out-Null
 New-Item -Path "$($wrkdir)\$($folderName)\outputXml" -ItemType Directory -Force | Out-Null
 
 
-$Global:totalJobs = ($vms | Measure-Object).Count
-$vms | ForEach-Object {
+$Global:totalJobs = ($entries | Measure-Object).Count
+$entries | ForEach-Object {
     if ( $jobCounter -lt $maxJobCount) {
         Write-Host Starting Job of $_.Name
         $job = Start-Job -Name $_.Name -ScriptBlock $task -ArgumentList $_, $wrkdir
@@ -71,8 +65,8 @@ while ($true) {
     $currentlyRunningJobs = $Global:jobs | where State -EQ "Running" | where HasMoreData -EQ $true
     #Write-Host Current Job is #$currentlyRunningJobs
     if ((($currentlyRunningJobs | Measure-Object).Count -lt $maxJobCount) -and (($jobCounter) -lt $Global:totalJobs)) {
-        Write-Host Starting Job of $vms[$Global:jobCounter].Name
-        $job = Start-Job -Name $vms[$Global:jobCounter].Name -ScriptBlock $task -ArgumentList $vms[$Global:jobCounter], $wrkdir 
+        Write-Host Starting Job of $entries[$Global:jobCounter].Name
+        $job = Start-Job -Name $entries[$Global:jobCounter].Name -ScriptBlock $task -ArgumentList $entries[$Global:jobCounter], $wrkdir 
         $Global:jobs += $job
         $Global:jobCounter++
     }
