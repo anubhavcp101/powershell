@@ -23,9 +23,9 @@ $task = {
 }
 #
 $optionsToAdd = @{
-    'OptA'='ValA';
-    'OptB'='ValB';
-    'OptC'='ValC'
+    'OptA' = 'ValA';
+    'OptB' = 'ValB';
+    'OptC' = 'ValC'
 }
 
 
@@ -38,9 +38,11 @@ $wrkdir = $PSScriptRoot
 Set-Location $PSScriptRoot
 $vms = Import-Csv -Path $filePath #-Header "Name"
 
-foreach ($instance in $vms) {
-    foreach ($key in $optionsToAdd.Keys) {
-        $instance | Add-Member -NotePropertyName "$($key)" -NotePropertyValue "$($optionsToAdd[$key])"
+if ( (Test-Path Variable:\optionsToAdd) -and ($optionsToAdd.Count -gt 0)) {
+    foreach ($instance in $vms) {
+        foreach ($key in $optionsToAdd.Keys) {
+            $instance | Add-Member -NotePropertyName "$($key)" -NotePropertyValue "$($optionsToAdd[$key])"
+        }
     }
 }
 
@@ -144,4 +146,4 @@ while ($true) {
         Start-Sleep -Seconds 30
     }
 }
-Get-ChildItem -Path "$($folderName)\outputXml\*.xml" | Select BaseName, @{Name="ErrMsg";Exp={Get-Item -Path $_.fullName | Import-Clixml | Where writeErrorStream -eq $true | Select -ExpandProperty TargetObject}} | Export-Csv -NoTypeInformation -Force -Path "$($folderName)\outputXml\error.csv"
+Get-ChildItem -Path "$($folderName)\outputXml\*.xml" | Select BaseName, @{Name = "ErrMsg"; Exp = { Get-Item -Path $_.fullName | Import-Clixml | Where writeErrorStream -eq $true | Select -ExpandProperty TargetObject } } | Export-Csv -NoTypeInformation -Force -Path "$($folderName)\outputXml\error.csv"
