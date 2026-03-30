@@ -36,25 +36,49 @@ $Global:jobErrors = ""
 $Global:errorFile = @()
 $wrkdir = $PSScriptRoot
 Set-Location $PSScriptRoot
+# $vms = Import-Csv -Path $filePath #-Header "Name"
 
-if (Test-Path $filePath) {
+try {
     $vms = Import-Csv -Path $filePath #-Header "Name"
-} else {
-    Write-Error "File not found. Please check the filepath: $($filePath)"
+}
+catch [System.IO.FileNotFoundException] {
+    Write-Output "File not found at the location: $filePath"
+    Write-Output $PSItem.tostring()
+    exit
+}
+catch [System.UnauthorizedAccessException] {
+    Write-Output "Access denied to the file: $filePath"
+    Write-Output $PSItem.tostring()
+    exit
+}
+catch [System.IO.DirectoryNotFoundException] {
+    Write-Output "a directory not found in the path provided: $filePath"
+    Write-Output $PSItem.tostring()
+    exit
+}
+catch {
+    Write-Output "Encounter an error: $($PSItem.Exception.Message)"
+    Write-Output $PSItem.tostring()
     exit
 }
 
 if ( (Test-Path Variable:\optionsToAdd) -and ($optionsToAdd.Count -gt 0)) {
-    foreach ($instance in $vms) {
-        foreach ($key in $optionsToAdd.Keys) {
-            $instance | Add-Member -NotePropertyName "$($key)".Replace(' ','') -NotePropertyValue "$($optionsToAdd[$key])"
+    try {
+        foreach ($instance in $vms) {
+            foreach ($key in $optionsToAdd.Keys) {
+                $instance | Add-Member -NotePropertyName "$($key)".Replace(' ', '') -NotePropertyValue "$($optionsToAdd[$key])"
+            }
         }
+    }
+    catch {
+        Write-Output "Failed to add additional options"
+        Write-Output $PSItem.tostring()
     }
 }
 
 $folderName = "Run-$(Get-Date -Format 'dd-MM-yyyyThh-mm')"
-New-Item -Path "$($wrkdir)\$($folderName)" -ItemType Directory -Force | Out-Null
-New-Item -Path "$($wrkdir)\$($folderName)\outputXml" -ItemType Directory -Force | Out-Null
+New-Item -Path "$($wrkdir)\$($folderName)" -ItemType Directory -Force -ErrorAction Stop | Out-Null
+New-Item -Path "$($wrkdir)\$($folderName)\outputXml" -ItemType Directory -Force -ErrorAction Stop | Out-Null
 
 
 $Global:totalJobs = ($vms | Measure-Object).Count
@@ -82,8 +106,8 @@ while ($true) {
         $currentJobs = $Global:jobs | where State -EQ "Running" | where HasMoreData -EQ $true
         if (($currentJobs | Measure-Object).Count -gt 0) {
             Write-Host "Currently Waiting for all jobs to be finished"
-            Write-Host Currently Running Jobs are:
-            $currentJobs | Select-Object Id, Name, State, HasMoreData | Format-Table -AutoSize -RepeatHeader
+            Write-Host "Currently Running Jobs are:"
+            $currentJobs | Select-Object Id, Name, State | Format-Table -AutoSize -RepeatHeader
             ###
             $currentJobs | ForEach-Object {
                 Receive-Job -Keep -Job $_ *>&1 | Out-File -Force -FilePath "$($folderName)\$($_.Name).txt" -ErrorVariable outFileError
@@ -108,7 +132,7 @@ while ($true) {
             Start-Transcript -Path "./$folderName/allJobs.txt" -Force
             $Global:jobs | ForEach-Object {
                 ($_ | Select-Object Id, Name, State, HasMoreData | Format-Table -AutoSize -HideTableHeaders)
-                $jobDetails = (Receive-Job -Job $_ -Keep) 
+                $jobDetails = (Receive-Job -Job $_ -Keep *>&1) 
                 Write-Host $jobDetails
             }
             Stop-Transcript
