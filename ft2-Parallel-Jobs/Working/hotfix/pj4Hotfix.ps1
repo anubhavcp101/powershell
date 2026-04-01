@@ -58,7 +58,6 @@ $task = {
                 $commandStatus = 'Failed'
             }
         }
-
     } while ($attempt -lt 3)
 
     $expVM = [PSCustomObject]@{
@@ -72,9 +71,7 @@ $task = {
 }
 #
 $optionToAdd = @{
-    'OptA' = 'ValA';
-    'OptB' = 'ValB';
-    'OptC' = 'ValC'
+
 }
 
 
@@ -122,7 +119,7 @@ if ( (Test-Path Variable:\optionToAdd) -and ($optionToAdd.Count -gt 0)) {
     try {
         foreach ($instance in $vms) {
             foreach ($key in $optionToAdd.Keys) {
-                $instance | Add-Member -NotePropertyName "$($key)".Replace(' ', '') -NotePropertyValue "$($optionToAdd[$key])"
+                $instance | Add-Member -NotePropertyName "$($key)".Replace(' ', '') -NotePropertyValue $optionToAdd[$key]
             }
         }
     }
@@ -280,8 +277,8 @@ foreach ($server in $responseObj) {
     if ($server.CommandStatus -eq 'Success') {
         $key = $htPatch.Keys | Where-Object { $server.OS -like "Microsoft $($_)*" } | Select-Object -First 1
         $server | Add-Member -NotePropertyName 'OsKey' -NotePropertyValue $key
-
-        $Missing = (Compare-Object -ReferenceObject $htPatch[$OsKey] -DifferenceObject $server.Patches)
+        $patches = $server.Patches -split ","
+        $Missing = (Compare-Object -ReferenceObject $htPatch[$server.OsKey] -DifferenceObject $patches)
         $Missing = ($Missing | Where-Object { $_.SideIndicator -eq '<=' }).InputObject -join ","
         if ($Missing -eq '') {
             $Missing = 'None'
