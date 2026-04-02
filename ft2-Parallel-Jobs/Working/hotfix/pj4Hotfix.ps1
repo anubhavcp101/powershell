@@ -1,6 +1,5 @@
 #
-$filePath = "..\..\grouped\vms.csv"
-$maxJobCount = 11
+$filePath = "..\..\grouped\vms.csv" # location of input csv file 
 $htPatch = @{
     'Windows Server 2012' = @();
     'Windows Server 2016' = @();
@@ -10,12 +9,14 @@ $htPatch = @{
     'Windows 10'          = @();
     'Windows 11'          = @()
 }
+$maxJob = 11 # Number of Jobs needs to run at a time
 #
+$reportPath = '' # It should be a location of a directory, not a file
 
 $task = {
     param(
         $vm,
-        $wrkdir)
+        $wrkdir=$HOME)
     #
     Write-Host "Starting Job for" $vm.Name 
     
@@ -26,7 +27,8 @@ $task = {
     $commandStatus = ''
     $commandOutput = ''
 
-    $vmStatus = Get-AzVM -Status -Name $vm.Name.trim() -ResourceGroupName $vm.ResourceGroup.trim()
+    $ctx = Set-AzContext -Subscription $vm.Subscription.trim()
+    $vmStatus = Get-AzVM -Status -Name $vm.Name.trim() -ResourceGroupName $vm.ResourceGroup.trim() -DefaultProfile $ctx -ErrorAction Stop
     if (($vmStatus.Statuses[1].DisplayStatus -ne 'VM running') -or ( -not ($vmStatus.VMAgent)) ) {
         Write-Output "The VM is not running. Please check $($vm.Name.trim())"
         $commandStatus = 'Failed'
@@ -39,7 +41,6 @@ $task = {
     do {
         $attempt++
         try {
-            $ctx = Set-AzContext -Subscription $vm.Subscription.trim()
             $commandOutput = Invoke-AzVMRunCommand -VMName $vm.Name.trim() -ResourceGroupName $vm.ResourceGroup.trim() -CommandId 'RunPowerShellScript' -ScriptPath '' -DefaultProfile $ctx -ErrorAction Stop
             $commandStatus = 'Success'
             break
@@ -49,23 +50,23 @@ $task = {
             Write-Output $PSItem.tostring()
             Write-Output $PSItem.ScriptStackTrace
             $commandOutput = "Command Failed: $($PSItem.tostring())"
-            if ($attempt -ne 3 ) {
+            if ($attempt -lt $vm.retry) {
                 Write-Output "Retry will be attempted after a delay of $(30*$attempt) seconds"
                 Start-Sleep -Seconds (30 * $attempt)
             }
-            elseif ($attempt -eq 3) {
+            elseif ($attempt -eq $vm.retry) {
                 Write-Output "Retried $($attempt) times but it failed. Please check $($vm.Name)"
                 $commandStatus = 'Failed'
             }
         }
-    } while ($attempt -lt 3)
+    } while ($attempt -lt $vm.retry)
 
     $expVM = [PSCustomObject]@{
         'VM'            = $vm.Name.trim();
         'CommandOutput' = $commandOutput;
         'CommandStatus' = $commandStatus
     }
-    $expVM | Export-Csv -NoTypeInformation -Path "$($wrkdir)\$($vm.reportTempDir)\$($vm.Name.trim()).csv" -Force -Append
+    $expVM | Export-Csv -NoTypeInformation -Path (Join-Path $vm.reportTempDir "$($vm.Name.trim()).csv") -Force -Append
     
     Write-Host "Finished Job for" $vm.Name
 }
@@ -74,6 +75,9 @@ $optionToAdd = @{
 
 }
 
+$retry = 3
+$optionToAdd.Add('retry',$retry)
+
 
 $Global:jobs = @()
 $Global:jobCounter = 0
@@ -81,15 +85,17 @@ $Global:totalJobs = 0
 $Global:jobErrors = ""
 $Global:errorFile = @()
 
-$reportPaths = @($PSScriptRoot, ($PWD.Path), $HOME, $env:TEMP, 'C:\Windows\Temp')
-$wrkdir = $reportPaths | Where-Object { ($_ -ne '') -and ($_ -ne $null) -and (Test-Path -Path $_) } | Select-Object -First 1
+$maxJobCount = @($maxJob, 30) | Where-Object { ($_ -ne '') -and ($_ -ne $null) -and ($_.GetType().ToString() -eq 'System.Int32')} | Select-Object -First 1
+
+$reportPaths = @($reportPath, $PSScriptRoot, ($PWD.Path), $HOME, $env:TEMP, 'C:\Temp')
+$wrkdir = $reportPaths | Where-Object { ($_ -ne '') -and ($_ -ne $null) -and (Test-Path -Path $_ -PathType Container) } | Select-Object -First 1
 
 Set-Location $wrkdir
 # $vms = Import-Csv -Path $filePath #-Header "Name"
 
 $reportTempDir = "Report-Temp-$(Get-Date -Format 'dd-MM-yyyy-hh-mm')"
-New-Item -Path "$($wrkdir)\$($reportTempDir)" -ItemType Directory -Force -ErrorAction Stop | Out-Null
-$optionToAdd.Add("reportTempDir", $reportTempDir)
+New-Item -Path (Join-Path $wrkdir $reportTempDir) -ItemType Directory -Force -ErrorAction Stop | Out-Null
+$optionToAdd.Add("reportTempDir", (Join-Path $wrkdir $reportTempDir))
 
 try {
     $vms = Import-Csv -Path $filePath #-Header "Name"
@@ -132,14 +138,14 @@ if ( (Test-Path Variable:\optionToAdd) -and ($optionToAdd.Count -gt 0)) {
 
 
 $folderName = "Run-$(Get-Date -Format 'dd-MM-yyyyThh-mm')"
-New-Item -Path "$($wrkdir)\$($folderName)" -ItemType Directory -Force -ErrorAction Stop | Out-Null
-New-Item -Path "$($wrkdir)\$($folderName)\outputXml" -ItemType Directory -Force -ErrorAction Stop | Out-Null
+New-Item -Path "$(Join-Path $wrkdir $folderName)" -ItemType Directory -Force -ErrorAction Stop | Out-Null
+New-Item -Path "$(Join-Path $wrkdir $folderName)\outputXml" -ItemType Directory -Force -ErrorAction Stop | Out-Null
 
 
 $Global:totalJobs = ($vms | Measure-Object).Count
 $vms | ForEach-Object {
     if ( $jobCounter -lt $maxJobCount) {
-        Write-Host Starting Job of $_.Name
+        Write-Host "Starting Job for $($_.Name)"
         $job = Start-Job -Name $_.Name -ScriptBlock $task -ArgumentList $_, $wrkdir
         $Global:jobs += $job
         $Global:jobCounter++
@@ -150,7 +156,7 @@ while ($true) {
     $currentlyRunningJobs = $Global:jobs | where State -EQ "Running" | where HasMoreData -EQ $true
     #Write-Host Current Job is #$currentlyRunningJobs
     if ((($currentlyRunningJobs | Measure-Object).Count -lt $maxJobCount) -and (($jobCounter) -lt $Global:totalJobs)) {
-        Write-Host Starting Job of $vms[$Global:jobCounter].Name
+        Write-Host "Starting Job for $($vms[$Global:jobCounter].Name)"
         $job = Start-Job -Name $vms[$Global:jobCounter].Name -ScriptBlock $task -ArgumentList $vms[$Global:jobCounter], $wrkdir 
         $Global:jobs += $job
         $Global:jobCounter++
@@ -234,6 +240,8 @@ while ($true) {
 Get-ChildItem -Path "$($folderName)\outputXml\*.xml" | Select BaseName, @{Name = "ErrMsg"; Exp = { Get-Item -Path $_.fullName | Import-Clixml | Where writeErrorStream -eq $true | Select -ExpandProperty TargetObject } } | Export-Csv -NoTypeInformation -Force -Path "$($folderName)\outputXml\error.csv"
 
 ### Processing ###
+Write-Output "Processing"
+
 Set-Location "$wrkdir\$reportTempDir"
 $VmResponses = Import-Csv -Path (Get-ChildItem -Path . -Filter *.csv)
 $responseObj = @()
@@ -263,19 +271,10 @@ foreach ( $response in $VmResponses) {
     }
 }
 
-# $htPatch = @{
-#     'Windows Server 2012' = @();
-#     'Windows Server 2016' = @();
-#     'Windows Server 2019' = @();
-#     'Windows Server 2022' = @();
-#     'Windows Server 2025' = @();
-#     'Windows 10'          = @();
-#     'Windows 11'          = @()
-# }
 
 foreach ($server in $responseObj) {
     if ($server.CommandStatus -eq 'Success') {
-        $key = $htPatch.Keys | Where-Object { $server.OS -like "Microsoft $($_)*" } | Select-Object -First 1
+        $key = $htPatch.Keys | Where-Object { $server.OS -like "*$($_)*" } | Select-Object -First 1
         $server | Add-Member -NotePropertyName 'OsKey' -NotePropertyValue $key
         $patches = $server.Patches -split ","
         $Missing = (Compare-Object -ReferenceObject $htPatch[$server.OsKey] -DifferenceObject $patches)
@@ -294,7 +293,7 @@ foreach ($server in $responseObj) {
 
 $responseObj | Export-Csv -NoTypeInformation -Force -Path "Combined-$(Get-Date -Format 'dd-MM-yyyy-hh-mm').csv"
 
-$reportPath = "$($wrkdir)\Report-$(Get-Date -Format 'dd-MM-yyyy-hh-mm').csv"
+$reportPath = Join-Path $wrkdir "Report-$(Get-Date -Format 'dd-MM-yyyy-hh-mm').csv"
 $responseObj | Select-Object -Property VmName, OS, Patches, Missing, Uptime, CommandStatus, CommandOutput | Export-Csv -NoTypeInformation -Force -Path $reportPath
 
 Write-Output "Report Generated at: $($reportPath)"
