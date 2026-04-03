@@ -16,18 +16,18 @@ $reportPath = '' # It should be a location of a directory, not a file
 $task = {
     param(
         $vm,
-        $wrkdir=$HOME)
+        $wrkdir = $HOME)
     #
     Write-Host "Starting Job for" $vm.Name 
     
-    $ErrorActionPreference = "Stop"
+    # $ErrorActionPreference = "Stop"
     Set-Location $wrkdir 
     #
 
     $commandStatus = ''
     $commandOutput = ''
 
-    $ctx = Set-AzContext -Subscription $vm.Subscription.trim()
+    $ctx = Set-AzContext -Subscription $vm.Subscription.trim() -ErrorAction Stop
     $vmStatus = Get-AzVM -Status -Name $vm.Name.trim() -ResourceGroupName $vm.ResourceGroup.trim() -DefaultProfile $ctx -ErrorAction Stop
     if (($vmStatus.Statuses[1].DisplayStatus -ne 'VM running') -or ( -not ($vmStatus.VMAgent)) ) {
         Write-Output "The VM is not running. Please check $($vm.Name.trim())"
@@ -50,22 +50,33 @@ $task = {
             Write-Output $PSItem.tostring()
             Write-Output $PSItem.ScriptStackTrace
             $commandOutput = "Command Failed: $($PSItem.tostring())"
-            if ($attempt -lt $vm.retry) {
+            $commandStatus = 'Failed'
+            if ($attempt -lt $vm.retry) { # retry+1
                 Write-Output "Retry will be attempted after a delay of $(30*$attempt) seconds"
                 Start-Sleep -Seconds (30 * $attempt)
             }
-            elseif ($attempt -eq $vm.retry) {
+            elseif ($attempt -eq $vm.retry) { # retry+1
                 Write-Output "Retried $($attempt) times but it failed. Please check $($vm.Name)"
-                $commandStatus = 'Failed'
             }
         }
-    } while ($attempt -lt $vm.retry)
+    } while ($attempt -lt $vm.retry) # retry+1
 
-    $expVM = [PSCustomObject]@{
-        'VM'            = $vm.Name.trim();
-        'CommandOutput' = $commandOutput;
-        'CommandStatus' = $commandStatus
+    $expVM = $null
+    if ($commandStatus -eq 'Success') {
+        $expVM = [PSCustomObject]@{
+            'VM'            = $vm.Name.trim();
+            'CommandOutput' = $commandOutput.Value[0].Message.trim();
+            'CommandStatus' = $commandStatus
+        }
     }
+    else {
+        $expVM = [PSCustomObject]@{
+            'VM'            = $vm.Name.trim();
+            'CommandOutput' = $commandOutput;
+            'CommandStatus' = $commandStatus
+        }
+    }
+
     $expVM | Export-Csv -NoTypeInformation -Path (Join-Path $vm.reportTempDir "$($vm.Name.trim()).csv") -Force -Append
     
     Write-Host "Finished Job for" $vm.Name
@@ -75,8 +86,8 @@ $optionToAdd = @{
 
 }
 
-$retry = 3
-$optionToAdd.Add('retry',$retry)
+$retry = 3 # 0 will disabled it.
+$optionToAdd.Add('retry', $retry)
 
 
 $Global:jobs = @()
@@ -85,7 +96,7 @@ $Global:totalJobs = 0
 $Global:jobErrors = ""
 $Global:errorFile = @()
 
-$maxJobCount = @($maxJob, 30) | Where-Object { ($_ -ne '') -and ($_ -ne $null) -and ($_.GetType().ToString() -eq 'System.Int32')} | Select-Object -First 1
+$maxJobCount = @($maxJob, 30) | Where-Object { ($_ -ne '') -and ($_ -ne $null) -and ($_.GetType().ToString() -eq 'System.Int32') } | Select-Object -First 1
 
 $reportPaths = @($reportPath, $PSScriptRoot, ($PWD.Path), $HOME, $env:TEMP, 'C:\Temp')
 $wrkdir = $reportPaths | Where-Object { ($_ -ne '') -and ($_ -ne $null) -and (Test-Path -Path $_ -PathType Container) } | Select-Object -First 1
@@ -242,12 +253,15 @@ Get-ChildItem -Path "$($folderName)\outputXml\*.xml" | Select BaseName, @{Name =
 ### Processing ###
 Write-Output "Processing"
 
-Set-Location "$wrkdir\$reportTempDir"
+Set-Location (Join-Path $wrkdir $reportTempDir) 
 $VmResponses = Import-Csv -Path (Get-ChildItem -Path . -Filter *.csv)
 $responseObj = @()
 foreach ( $response in $VmResponses) {
     if ($response.CommandStatus -eq 'Success') {
         $comm = $response.CommandOutput -split "&"
+        if (($comm[2] -eq '') -or ($comm[2] -eq 'Nothing Installed')) {
+            $comm[2] = 'Nothing Installed'
+        }
         $responseObj += [PSCustomObject]@{
             'VmName'        = $response.VM;
             'HostName'      = $comm[0];
@@ -276,13 +290,18 @@ foreach ($server in $responseObj) {
     if ($server.CommandStatus -eq 'Success') {
         $key = $htPatch.Keys | Where-Object { $server.OS -like "*$($_)*" } | Select-Object -First 1
         $server | Add-Member -NotePropertyName 'OsKey' -NotePropertyValue $key
-        $patches = $server.Patches -split ","
-        $Missing = (Compare-Object -ReferenceObject $htPatch[$server.OsKey] -DifferenceObject $patches)
-        $Missing = ($Missing | Where-Object { $_.SideIndicator -eq '<=' }).InputObject -join ","
-        if ($Missing -eq '') {
-            $Missing = 'None'
-        } 
-        $server | Add-Member -NotePropertyName 'Missing' -NotePropertyValue $Missing
+        if (($server.Patches -ne '') -or ($null -ne $server.Patches) -or ($server.Patches -ne 'Nothing Installed')) {
+            $patches = $server.Patches -split ","
+            $Missing = (Compare-Object -ReferenceObject $htPatch[$server.OsKey] -DifferenceObject $patches)
+            $Missing = ($Missing | Where-Object { $_.SideIndicator -eq '<=' }).InputObject -join ","
+            if ($Missing -eq '') {
+                $Missing = 'None'
+            } 
+            $server | Add-Member -NotePropertyName 'Missing' -NotePropertyValue $Missing
+        } else {
+            $server | Add-Member -NotePropertyName 'Missing' -NotePropertyValue ($htPatch[$server.OsKey] -join ',')
+        }
+
     }
     else {
         $server | Add-Member -NotePropertyName 'OsKey' -NotePropertyValue 'Error'
@@ -297,6 +316,3 @@ $reportPath = Join-Path $wrkdir "Report-$(Get-Date -Format 'dd-MM-yyyy-hh-mm').c
 $responseObj | Select-Object -Property VmName, OS, Patches, Missing, Uptime, CommandStatus, CommandOutput | Export-Csv -NoTypeInformation -Force -Path $reportPath
 
 Write-Output "Report Generated at: $($reportPath)"
-
-
-
