@@ -16,12 +16,12 @@ $reportPath = '' # It should be a location of a directory, not a file
 $task = {
     param(
         $vm,
-        $wrkdir = $HOME)
+        $wrkdir)
     #
     Write-Host "Starting Job for" $vm.Name 
     
     # $ErrorActionPreference = "Stop"
-    Set-Location $wrkdir 
+    Set-Location $wrkdir -ErrorAction Stop
     #
 
     $commandStatus = ''
@@ -33,33 +33,42 @@ $task = {
         Write-Output "The VM is not running. Please check $($vm.Name.trim())"
         $commandStatus = 'Failed'
         $commandOutput = 'VM not running'
-        Write-Output 'Exiting'
-        exit
+        
     }
+    elseif ($vmStatus.OsName -notlike "*Windows*") {
+        Write-Output "Not a windows VM"
+        $commandStatus = 'Failed'
+        $commandOutput = 'Not a Windows VM'
+        
+    }
+    else {
 
-    $attempt = 0
-    do {
-        $attempt++
-        try {
-            $commandOutput = Invoke-AzVMRunCommand -VMName $vm.Name.trim() -ResourceGroupName $vm.ResourceGroup.trim() -CommandId 'RunPowerShellScript' -ScriptPath '' -DefaultProfile $ctx -ErrorAction Stop
-            $commandStatus = 'Success'
-            break
-        }
-        catch {
-            Write-Output "Attempt $($attempt): An Error Occurred"
-            Write-Output $PSItem.tostring()
-            Write-Output $PSItem.ScriptStackTrace
-            $commandOutput = "Command Failed: $($PSItem.tostring())"
-            $commandStatus = 'Failed'
-            if ($attempt -lt $vm.retry) { # retry+1
-                Write-Output "Retry will be attempted after a delay of $(30*$attempt) seconds"
-                Start-Sleep -Seconds (30 * $attempt)
+        $attempt = 0
+        do {
+            $attempt++
+            try {
+                $commandOutput = Invoke-AzVMRunCommand -VMName $vm.Name.trim() -ResourceGroupName $vm.ResourceGroup.trim() -CommandId 'RunPowerShellScript' -ScriptPath '' -DefaultProfile $ctx -ErrorAction Stop
+                $commandStatus = 'Success'
+                break
             }
-            elseif ($attempt -eq $vm.retry) { # retry+1
-                Write-Output "Retried $($attempt) times but it failed. Please check $($vm.Name)"
+            catch {
+                Write-Output "Attempt $($attempt): An Error Occurred"
+                Write-Output $PSItem.tostring()
+                Write-Output $PSItem.ScriptStackTrace
+                $commandOutput = "Command Failed: $($PSItem.tostring())"
+                $commandStatus = 'Failed'
+                if ($attempt -lt $vm.retry) {
+                    # retry+1
+                    Write-Output "Retry will be attempted after a delay of $(30*$attempt) seconds"
+                    Start-Sleep -Seconds (30 * $attempt)
+                }
+                elseif ($attempt -eq $vm.retry) {
+                    # retry+1
+                    Write-Output "Retried $($attempt) times but it failed. Please check $($vm.Name)"
+                }
             }
-        }
-    } while ($attempt -lt $vm.retry) # retry+1
+        } while ($attempt -lt $vm.retry) # retry+1
+    }
 
     $expVM = $null
     if ($commandStatus -eq 'Success') {
@@ -107,6 +116,11 @@ Set-Location $wrkdir
 $reportTempDir = "Report-Temp-$(Get-Date -Format 'dd-MM-yyyy-hh-mm')"
 New-Item -Path (Join-Path $wrkdir $reportTempDir) -ItemType Directory -Force -ErrorAction Stop | Out-Null
 $optionToAdd.Add("reportTempDir", (Join-Path $wrkdir $reportTempDir))
+
+if (((Get-Content $filePath)[0] -match '(.+,{1})?Name,ResourceGroup,Subscription(,.*)?$')) {
+    Write-Output "Please check headers in the csv file"
+    exit
+}
 
 try {
     $vms = Import-Csv -Path $filePath #-Header "Name"
@@ -298,7 +312,8 @@ foreach ($server in $responseObj) {
                 $Missing = 'None'
             } 
             $server | Add-Member -NotePropertyName 'Missing' -NotePropertyValue $Missing
-        } else {
+        }
+        else {
             $server | Add-Member -NotePropertyName 'Missing' -NotePropertyValue ($htPatch[$server.OsKey] -join ',')
         }
 
