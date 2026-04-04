@@ -265,8 +265,6 @@ Write-Output "Processing"
 Set-Location (Join-Path $wrkdir $reportTempDir) 
 $VmOutputs = Import-Csv -Path (Get-ChildItem -Path . -Filter *.csv)
 
-$responseObj | Export-Csv -NoTypeInformation -Force -Path "Combined-$(Get-Date -Format 'dd-MM-yyyy-hh-mm').csv"
-
 $reportPath = Join-Path $wrkdir "Report-$(Get-Date -Format 'dd-MM-yyyy-hh-mm').csv"
 $VmOutputs | Export-Csv -NoTypeInformation -Force -Path $reportPath
 
