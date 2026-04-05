@@ -23,6 +23,7 @@ Connect-AzAccount
 $fPaths = @()
 $fPaths += $filePath
 $resType = ""
+$inputDir = @($PSScriptRoot,($PWD.Path),$HOME,$env:TEMP,'C:\Temp') | Where-Object { ($_ -ne '') -and ($null -ne $_) -and (Test-Path -Path $_ -PathType Container)} | Select-Object -First 1 
 if ($subs.Count -gt 0) {
 
     $allSubs = Get-AzSubscription
@@ -41,7 +42,7 @@ Resources
 | project Name=name, ResourceGroup=resourcegroup, Subscription = subscriptionId
 "@
         $data = Search-AzGraph -Query $subsQuery -UseTenantScope -First 1000
-        $fPath = Join-Path ($PWD.Path) "input-subs-$(Get-Date -Format 'dd-MM-yyyy-hh-mm').csv"
+        $fPath = Join-Path ($inputDir) "input-subs-$(Get-Date -Format 'dd-MM-yyyy-hh-mm').csv"
         $data.Data | Export-Csv -NoTypeInformation -Force -Path $fPath
         $fPaths += $fPaths
 
@@ -61,7 +62,7 @@ Resources | where resourcegroup in~ ($($qString)) | where type == `"$($resType)`
 | project Name=name, ResourceGroup=resourcegroup, Subscription=subscriptionId
 "@
         $data = Search-AzGraph -Query $rgQuery -UseTenantScope -First 1000
-        $fPath = Join-Path ($PWD.Path) "input-rg-$(Get-Date -Format 'dd-MM-yyyy-hh-mm').csv"
+        $fPath = Join-Path ($inputDir) "input-rg-$(Get-Date -Format 'dd-MM-yyyy-hh-mm').csv"
         $data.Data | Export-Csv -NoTypeInformation -Force -Path $fPath
         $fPaths += $fPath
 
@@ -86,7 +87,7 @@ Resources | where $($joinTagStr) | where type == `"$($resType)`"
 | project Name=name,ResourceGroup=resourcegroup,Subscription=subscriptionId
 "@
         $data = Search-AzGraph -Query $tagQuery -UseTenantScope -First 1000
-        $fPath = Join-Path ($PWD.Path) "input-tag-$(Get-Date -Format 'dd-MM-yyyy-hh-mm').csv"
+        $fPath = Join-Path ($inputDir) "input-tag-$(Get-Date -Format 'dd-MM-yyyy-hh-mm').csv"
         $fPaths += $fPaths
         $data.Data | Export-Csv -NoTypeInformation -Force -Path $fPath
     }
