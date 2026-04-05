@@ -19,8 +19,10 @@ $tag = @{'Key' = 'Value' }
 
 
 Connect-AzAccount
+
 $fPaths = @()
 $fPaths += $filePath
+$resType = ""
 if ($subs.Count -gt 0) {
 
     $allSubs = Get-AzSubscription
@@ -34,7 +36,8 @@ if ($subs.Count -gt 0) {
         $ErrorActionPreference = 'Stop'
         $subsQuery = @"
 Resources 
-| where subscriptionid in~ ($($qString)) 
+| where subscriptionid in~ ($($qString))
+| where type == `"$($resType)`"
 | project Name=name, ResourceGroup=resourcegroup, Subscription = subscriptionId
 "@
         $data = Search-AzGraph -Query $subsQuery -UseTenantScope -First 1000
@@ -54,7 +57,8 @@ if ($rgs.Count -gt 0) {
         $ErrorActionPreference = 'Stop'
         $qString = "`"" + ( $rgs -join "`",`"" ) + "`""
         $rgQuery = @"
-Resources | where resourcegroup in~ ($($qString)) | project Name=name, ResourceGroup=resourcegroup, Subscription=subscriptionId
+Resources | where resourcegroup in~ ($($qString)) | where type == `"$($resType)`"
+| project Name=name, ResourceGroup=resourcegroup, Subscription=subscriptionId
 "@
         $data = Search-AzGraph -Query $rgQuery -UseTenantScope -First 1000
         $fPath = Join-Path ($PWD.Path) "input-rg-$(Get-Date -Format 'dd-MM-yyyy-hh-mm').csv"
@@ -78,7 +82,8 @@ if ($tag.Count -gt 0) {
         }
         $joinTagStr = $tagStrings -join " and "
         $tagQuery = @"
-Resources | where $($joinTagStr) | project Name=name,ResourceGroup=resourcegroup,Subscription=subscriptionId
+Resources | where $($joinTagStr) | where type == `"$($resType)`"
+| project Name=name,ResourceGroup=resourcegroup,Subscription=subscriptionId
 "@
         $data = Search-AzGraph -Query $tagQuery -UseTenantScope -First 1000
         $fPath = Join-Path ($PWD.Path) "input-tag-$(Get-Date -Format 'dd-MM-yyyy-hh-mm').csv"
@@ -201,19 +206,22 @@ $reportTempDir = "Report-Temp-$(Get-Date -Format 'dd-MM-yyyy-hh-mm')"
 New-Item -Path (Join-Path $wrkdir $reportTempDir) -ItemType Directory -Force -ErrorAction Stop | Out-Null
 $optionToAdd.Add("reportTempDir", (Join-Path $wrkdir $reportTempDir))
 
+### Checking for headers in CSV file. Headers should be Name,ResourceGroup,Subscription ###
+$columns = "Name,ResourceGroup,Subscription"
 $fps = @($filePath,$fPaths) | Where-Object {$_.GetType().ToString() -eq 'System.Object[]'} | Select-Object -First 1
-$validateFiles = $fps | Where-Object { (Get-Content $_)[0] -notmatch '(.+,{1})?Name,ResourceGroup,Subscription(,.+)?$' } 
+$validateFiles = $fps | Where-Object { (Get-Content $_)[0] -notmatch ('(.+,{1})?'+$columns+'(,.+)?$') }
 if (($validateFiles | Measure-Object).Count -gt 0) {
     Write-Output "Please check headers in the files:"
     Write-Output ($validateFiles -join ",`n")
     exit
 }
 if ($filePath.GetType().ToString() -eq 'System.String') {
-    if (((Get-Content $filePath)[0] -notmatch '(.+,{1})?Name,ResourceGroup,Subscription(,.+)?$')) {
+    if (((Get-Content $filePath)[0] -notmatch ('(.+,{1})?'+$columns+'(,.+)?$'))) {
         Write-Output "Please check headers of the file: $($filePath)"
         exit
     }
 }
+### 
 
 try {
     $vms = Import-Csv -Path $filePath #-Header "Name" # Update path 
