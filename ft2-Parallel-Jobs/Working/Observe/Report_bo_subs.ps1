@@ -1,18 +1,114 @@
 #
-$filePath = "..\..\grouped\vms.csv" # location of input csv file 
 $maxJob = 11 # Number of Jobs needs to run at a time
+$htPatch = @{
+    'Windows Server 2012' = @();
+    'Windows Server 2016' = @();
+    'Windows Server 2019' = @();
+    'Windows Server 2022' = @();
+    'Windows Server 2025' = @();
+    'Windows 10'          = @();
+    'Windows 11'          = @()
+}
 $reportPath = '' # It should be a location of a directory, not a file
+#
+
+$subs = @()
+$rgs = @()
+$filePath = "..\..\grouped\vms.csv" # location of input csv file 
+$tag = @{'Key' = 'Value' }
+
+
+Connect-AzAccount
+$fPaths = @()
+$fPaths += $filePath
+if ($subs.Count -gt 0) {
+
+    $allSubs = Get-AzSubscription
+    $names = $allSubs | Where-Object { $_.Name -in $subs } | Select-Object -ExpandProperty Id
+    $ids = $allSubs.Id | Where-Object { $_ -in $subs }
+
+    $fsubs = $names + $ids 
+    $qString = "`"" + ( $fsubs -join "`",`"" ) + "`""
+
+    try {
+        $ErrorActionPreference = 'Stop'
+        $subsQuery = @"
+Resources 
+| where subscriptionid in~ ($($qString)) 
+| project Name=name, ResourceGroup=resourcegroup, Subscription = subscriptionId
+"@
+        $data = Search-AzGraph -Query $subsQuery -UseTenantScope -First 1000
+        $fPath = Join-Path ($PWD.Path) "input-subs-$(Get-Date -Format 'dd-MM-yyyy-hh-mm').csv"
+        $data.Data | Export-Csv -NoTypeInformation -Force -Path $fPath
+        $fPaths += $fPaths
+
+    }
+    catch {
+        Write-Output 'An Error Occurred'
+        Write-Output $PSItem.tostring()
+        Write-Output $PSItem.ScriptStackTrace
+    }
+}
+if ($rgs.Count -gt 0) {
+    try {
+        $ErrorActionPreference = 'Stop'
+        $qString = "`"" + ( $rgs -join "`",`"" ) + "`""
+        $rgQuery = @"
+Resources | where resourcegroup in~ ($($qString)) | project Name=name, ResourceGroup=resourcegroup, Subscription=subscriptionId
+"@
+        $data = Search-AzGraph -Query $rgQuery -UseTenantScope -First 1000
+        $fPath = Join-Path ($PWD.Path) "input-rg-$(Get-Date -Format 'dd-MM-yyyy-hh-mm').csv"
+        $data.Data | Export-Csv -NoTypeInformation -Force -Path $fPath
+        $fPaths += $fPath
+
+    }
+    catch {
+        Write-Output 'An Error Occurred'
+        Write-Output $PSItem.tostring()
+        Write-Output $PSItem.ScriptStackTrace
+    }
+}
+$tagOp = "=~" # other options are: ==, like 
+if ($tag.Count -gt 0) {
+    try {
+        $ErrorActionPreference = 'Stop'
+        $tagStrings = @()
+        foreach ($key in $tag.Keys) {
+            $tagStrings += "tags[`'$($key)`'] $($tagOp) `'$($tag["$($key)"])`'"
+        }
+        $joinTagStr = $tagStrings -join " and "
+        $tagQuery = @"
+Resources | where $($joinTagStr) | project Name=name,ResourceGroup=resourcegroup,Subscription=subscriptionId
+"@
+        $data = Search-AzGraph -Query $tagQuery -UseTenantScope -First 1000
+        $fPath = Join-Path ($PWD.Path) "input-tag-$(Get-Date -Format 'dd-MM-yyyy-hh-mm').csv"
+        $fPaths += $fPaths
+        $data.Data | Export-Csv -NoTypeInformation -Force -Path $fPath
+    }
+    catch {
+        Write-Output 'An Error Occurred'
+        Write-Output $PSItem.tostring()
+        Write-Output $PSItem.ScriptStackTrace
+    }
+
+}
+
+$fullLists = Import-Csv $fPaths 
+$resPath = Join-Path ($PWD.Path) "res-$(Get-Date -Format 'dd-MM-yyyy-hh-mm').csv"
+$fullLists | Export-Csv -NoTypeInformation -Force -Path $resPath
+# $filePath = $fPaths
+
 
 $task = {
     param(
-        #
         $vm,
         $wrkdir)
+    #
     Write-Host "Starting Job for" $vm.Name 
-
+    
     # $ErrorActionPreference = "Stop"
     Set-Location $wrkdir -ErrorAction Stop
-
+    #
 
     $commandStatus = ''
     $commandOutput = ''
@@ -47,11 +143,11 @@ $task = {
                 Write-Output $PSItem.ScriptStackTrace
                 $commandOutput = "Command Failed: $($PSItem.tostring())"
                 $commandStatus = 'Failed'
-                if ($attempt -lt $vm.retry) { # retry+1
+                if ($attempt -lt $vm.retry) {# retry+1
                     Write-Output "Retry will be attempted after a delay of $(30*$attempt) seconds"
                     Start-Sleep -Seconds (30 * $attempt)
                 }
-                elseif ($attempt -eq $vm.retry) { # retry+1
+                elseif ($attempt -eq $vm.retry) {# retry+1
                     Write-Output "Retried $($attempt) times but it failed. Please check $($vm.Name)"
                 }
             }
@@ -105,13 +201,16 @@ $reportTempDir = "Report-Temp-$(Get-Date -Format 'dd-MM-yyyy-hh-mm')"
 New-Item -Path (Join-Path $wrkdir $reportTempDir) -ItemType Directory -Force -ErrorAction Stop | Out-Null
 $optionToAdd.Add("reportTempDir", (Join-Path $wrkdir $reportTempDir))
 
-if (((Get-Content $filePath)[0] -match '(.+,{1})?Name,ResourceGroup,Subscription(,.+)?$')) {
-    Write-Output "Please check headers in the csv file"
+$fps = @($filePath,$fPaths) | Where-Object {$_.GetType().ToString() -eq ''} | Select-Object -First 1
+$validateFiles = $fps | Where-Object { (Get-Content $_)[0] -notmatch '(.+,{1})?Name,ResourceGroup,Subscription(,.+)?$' } 
+if (($validateFiles | Measure-Object).Count -gt 0) {
+    Write-Output "Please check headers in the files:"
+    Write-Output ($validateFiles -join ",`n")
     exit
 }
 
 try {
-    $vms = Import-Csv -Path $filePath #-Header "Name"
+    $vms = Import-Csv -Path $filePath #-Header "Name" # Update path 
 }
 catch [System.IO.FileNotFoundException] {
     Write-Output "File not found at the location: $filePath"
@@ -253,17 +352,75 @@ while ($true) {
 Get-ChildItem -Path "$($folderName)\outputXml\*.xml" | Select BaseName, @{Name = "ErrMsg"; Exp = { Get-Item -Path $_.fullName | Import-Clixml | Where writeErrorStream -eq $true | Select -ExpandProperty TargetObject } } | Export-Csv -NoTypeInformation -Force -Path "$($folderName)\outputXml\error.csv"
 
 ### Cleaning ###
-$vars = @('vms','vm','maxJobCount','maxJob','currentJobs','failedJobs','jobCounter','folderName','CurrentlyRunningJobs','jobs','totalJobs','optionToAdd','retry')
-$vars | Where-Object { Test-Path "Variable:\$($_)"} | ForEach-Object { Clear-Variable $_}
+$Global:jobs | Remove-Job -Force
+$vars = @('vms', 'vm', 'maxJobCount', 'maxJob', 'currentJobs', 'failedJobs', 'jobCounter', 'folderName', 'CurrentlyRunningJobs', 'jobs', 'totalJobs', 'optionToAdd', 'retry')
+$vars | Where-Object { Test-Path "Variable:\$($_)" } | ForEach-Object { Clear-Variable $_ }
 Clear-Variable 'vars'
 
 ### Processing ###
 Write-Output "Processing"
 
 Set-Location (Join-Path $wrkdir $reportTempDir) 
-$VmOutputs = Import-Csv -Path (Get-ChildItem -Path . -Filter *.csv)
+$VmResponses = Import-Csv -Path (Get-ChildItem -Path . -Filter *.csv)
+$responseObj = @()
+foreach ( $response in $VmResponses) {
+    if ($response.CommandStatus -eq 'Success') {
+        $comm = $response.CommandOutput -split "&"
+        if (($comm[2] -eq '') -or ($comm[2] -eq 'Nothing Installed')) {
+            $comm[2] = 'Nothing Installed'
+        }
+        $responseObj += [PSCustomObject]@{
+            'VmName'        = $response.VM;
+            'HostName'      = $comm[0];
+            'OS'            = $comm[1];
+            'Patches'       = $comm[2];
+            'Uptime'        = $comm[3];
+            'CommandStatus' = $response.CommandStatus;
+            'Output'        = $response.CommandOutput
+        }
+    }
+    else {
+        $responseObj += [PSCustomObject]@{
+            'VmName'        = $response.VM;
+            'HostName'      = 'Error';
+            'OS'            = 'Error';
+            'Patches'       = 'Error';
+            'Uptime'        = 'Error';
+            'CommandStatus' = $response.CommandStatus;
+            'Output'        = $response.CommandOutput
+        }
+    }
+}
+
+
+foreach ($server in $responseObj) {
+    if ($server.CommandStatus -eq 'Success') {
+        $key = $htPatch.Keys | Where-Object { $server.OS -like "*$($_)*" } | Select-Object -First 1
+        $server | Add-Member -NotePropertyName 'OsKey' -NotePropertyValue $key
+        if (($server.Patches -ne '') -or ($null -ne $server.Patches) -or ($server.Patches -ne 'Nothing Installed')) {
+            $patches = $server.Patches -split ","
+            $Missing = (Compare-Object -ReferenceObject $htPatch[$server.OsKey] -DifferenceObject $patches)
+            $Missing = ($Missing | Where-Object { $_.SideIndicator -eq '<=' }).InputObject -join ","
+            if ($Missing -eq '') {
+                $Missing = 'None'
+            } 
+            $server | Add-Member -NotePropertyName 'Missing' -NotePropertyValue $Missing
+        }
+        else {
+            $server | Add-Member -NotePropertyName 'Missing' -NotePropertyValue ($htPatch[$server.OsKey] -join ',')
+        }
+
+    }
+    else {
+        $server | Add-Member -NotePropertyName 'OsKey' -NotePropertyValue 'Error'
+        $server | Add-Member -NotePropertyName 'Missing' -NotePropertyValue 'Error'
+    }
+
+}
+
+$responseObj | Export-Csv -NoTypeInformation -Force -Path "Combined-$(Get-Date -Format 'dd-MM-yyyy-hh-mm').csv"
 
 $reportPath = Join-Path $wrkdir "Report-$(Get-Date -Format 'dd-MM-yyyy-hh-mm').csv"
-$VmOutputs | Export-Csv -NoTypeInformation -Force -Path $reportPath
+$responseObj | Select-Object -Property VmName, OS, Patches, Missing, Uptime, CommandStatus, CommandOutput | Export-Csv -NoTypeInformation -Force -Path $reportPath
 
 Write-Output "Report Generated at: $($reportPath)"
