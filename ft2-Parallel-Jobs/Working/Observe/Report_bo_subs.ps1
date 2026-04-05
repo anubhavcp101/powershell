@@ -191,7 +191,7 @@ $Global:errorFile = @()
 
 $maxJobCount = @($maxJob, 30) | Where-Object { ($_ -ne '') -and ($_ -ne $null) -and ($_.GetType().ToString() -eq 'System.Int32') } | Select-Object -First 1
 
-$reportPaths = @($reportPath, $PSScriptRoot, ($PWD.Path), $HOME, $env:TEMP, 'C:\Temp')
+$reportPaths = @($reportPath, $PSScriptRoot, ($PWD.Path), $HOME, $env:TEMP, 'C:\Temp','C:\')
 $wrkdir = $reportPaths | Where-Object { ($_ -ne '') -and ($_ -ne $null) -and (Test-Path -Path $_ -PathType Container) } | Select-Object -First 1
 
 Set-Location $wrkdir
@@ -207,6 +207,12 @@ if (($validateFiles | Measure-Object).Count -gt 0) {
     Write-Output "Please check headers in the files:"
     Write-Output ($validateFiles -join ",`n")
     exit
+}
+if ($filePath.GetType().ToString() -eq 'System.String') {
+    if (((Get-Content $filePath)[0] -notmatch '(.+,{1})?Name,ResourceGroup,Subscription(,.+)?$')) {
+        Write-Output "Please check headers of the file: $($filePath)"
+        exit
+    }
 }
 
 try {

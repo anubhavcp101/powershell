@@ -117,7 +117,7 @@ $reportTempDir = "Report-Temp-$(Get-Date -Format 'dd-MM-yyyy-hh-mm')"
 New-Item -Path (Join-Path $wrkdir $reportTempDir) -ItemType Directory -Force -ErrorAction Stop | Out-Null
 $optionToAdd.Add("reportTempDir", (Join-Path $wrkdir $reportTempDir))
 
-if (((Get-Content $filePath)[0] -match '(.+,{1})?Name,ResourceGroup,Subscription(,.+)?$')) {
+if (((Get-Content $filePath)[0] -notmatch '(.+,{1})?Name,ResourceGroup,Subscription(,.+)?$')) {
     Write-Output "Please check headers in the csv file"
     exit
 }
