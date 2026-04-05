@@ -93,10 +93,10 @@ Resources | where $($joinTagStr) | project Name=name,ResourceGroup=resourcegroup
 
 }
 
-$fullLists = Import-Csv $fPaths 
+$fullLists = Import-Csv $fPaths | Sort-Object -Unique #-Property {$_}
 $resPath = Join-Path ($PWD.Path) "res-$(Get-Date -Format 'dd-MM-yyyy-hh-mm').csv"
 $fullLists | Export-Csv -NoTypeInformation -Force -Path $resPath
-# $filePath = $fPaths
+# $filePath = $fPaths # or $filePath = $resPath
 
 
 $task = {
@@ -201,7 +201,7 @@ $reportTempDir = "Report-Temp-$(Get-Date -Format 'dd-MM-yyyy-hh-mm')"
 New-Item -Path (Join-Path $wrkdir $reportTempDir) -ItemType Directory -Force -ErrorAction Stop | Out-Null
 $optionToAdd.Add("reportTempDir", (Join-Path $wrkdir $reportTempDir))
 
-$fps = @($filePath,$fPaths) | Where-Object {$_.GetType().ToString() -eq ''} | Select-Object -First 1
+$fps = @($filePath,$fPaths) | Where-Object {$_.GetType().ToString() -eq 'System.Object[]'} | Select-Object -First 1
 $validateFiles = $fps | Where-Object { (Get-Content $_)[0] -notmatch '(.+,{1})?Name,ResourceGroup,Subscription(,.+)?$' } 
 if (($validateFiles | Measure-Object).Count -gt 0) {
     Write-Output "Please check headers in the files:"
