@@ -106,7 +106,7 @@ $union = @($union,$true) | Where-Object { $_ -in @($true,$false)} | Select-Objec
 if ($union) {
     $fullLists = Import-Csv $fPaths | Sort-Object -Unique
     $resPath = Join-Path ($inputDir) "res-$(Get-Date -Format 'dd-MM-yyyy-hh-mm').csv"
-    $intersectList | Export-Csv -NoTypeInformation -Force -Path $resPath
+    $fullLists | Export-Csv -NoTypeInformation -Force -Path $resPath
 }
 else {
     $fullLists = Import-Csv $fPaths
