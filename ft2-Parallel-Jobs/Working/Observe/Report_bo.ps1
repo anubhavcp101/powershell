@@ -101,18 +101,16 @@ Resources | where $($joinTagStr) | where type == `"$($resType)`"
 
 }
 
-$resPath = ''
+$resPath = Join-Path ($inputDir) "res-$(Get-Date -Format 'dd-MM-yyyy-hh-mm').csv"
 $union = @($union,$true) | Where-Object { $_ -in @($true,$false)} | Select-Object -First 1
 if ($union) {
     $fullLists = Import-Csv $fPaths | Sort-Object -Unique
-    $resPath = Join-Path ($inputDir) "res-$(Get-Date -Format 'dd-MM-yyyy-hh-mm').csv"
     $fullLists | Export-Csv -NoTypeInformation -Force -Path $resPath
 }
 else {
     $fullLists = Import-Csv $fPaths
     $cols = (($fullLists)[0].PSObject.Properties | Select-Object -ExpandProperty Name)
     $intersectList = $fullLists | Group-Object -Property $cols | Where-Object { $_.Count -eq ($fPaths.Count) } | ForEach-Object { $_.Group | Sort-Object -Unique }
-    $resPath = Join-Path ($inputDir) "res-$(Get-Date -Format 'dd-MM-yyyy-hh-mm').csv"
     $intersectList | Export-Csv -NoTypeInformation -Force -Path $resPath
 }
 
