@@ -102,6 +102,7 @@ Resources | where $($joinTagStr) | where type == `"$($resType)`"
 }
 
 $resPath = ''
+$union = @($union,$true) | Where-Object { $_ -in @($true,$false)} | Select-Object -First 1
 if ($union) {
     $fullLists = Import-Csv $fPaths | Sort-Object -Unique
     $resPath = Join-Path ($inputDir) "res-$(Get-Date -Format 'dd-MM-yyyy-hh-mm').csv"
