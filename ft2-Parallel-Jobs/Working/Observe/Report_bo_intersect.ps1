@@ -102,7 +102,7 @@ Resources | where $($joinTagStr) | where type == `"$($resType)`"
 $fullLists = Import-Csv $fPaths
 $cols = (($fullLists)[0].PSObject.Properties | Select-Object -ExpandProperty Name)
 $intersectList = $fullLists | Group-Object -Property $cols | Where-Object { $_.Count -eq ($fPaths.Count)} | ForEach-Object { $_.Group | Sort-Object -Unique}
-$resPath = Join-Path ($PWD.Path) "res-$(Get-Date -Format 'dd-MM-yyyy-hh-mm').csv"
+$resPath = Join-Path ($inputDir) "res-$(Get-Date -Format 'dd-MM-yyyy-hh-mm').csv"
 $intersectList | Export-Csv -NoTypeInformation -Force -Path $resPath
 # $filePath = $fPaths # or $filePath = $resPath
 

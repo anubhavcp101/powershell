@@ -20,10 +20,12 @@ $tag = @{'Key' = 'Value' }
 
 Connect-AzAccount
 
+$union = $true
+
 $fPaths = @()
 $fPaths += $filePath
 $resType = ""
-$inputDir = @($PSScriptRoot,($PWD.Path),$HOME,$env:TEMP,'C:\Temp') | Where-Object { ($_ -ne '') -and ($null -ne $_) -and (Test-Path -Path $_ -PathType Container)} | Select-Object -First 1 
+$inputDir = @($PSScriptRoot, ($PWD.Path), $HOME, $env:TEMP, 'C:\Temp') | Where-Object { ($_ -ne '') -and ($null -ne $_) -and (Test-Path -Path $_ -PathType Container) } | Select-Object -First 1 
 if ($subs.Count -gt 0) {
 
     $allSubs = Get-AzSubscription
@@ -99,9 +101,20 @@ Resources | where $($joinTagStr) | where type == `"$($resType)`"
 
 }
 
-$fullLists = Import-Csv $fPaths | Sort-Object -Unique #-Property {$_}
-$resPath = Join-Path ($inputDir) "res-$(Get-Date -Format 'dd-MM-yyyy-hh-mm').csv"
-$fullLists | Export-Csv -NoTypeInformation -Force -Path $resPath
+$resPath = ''
+if ($union) {
+    $fullLists = Import-Csv $fPaths | Sort-Object -Unique
+    $resPath = Join-Path ($inputDir) "res-$(Get-Date -Format 'dd-MM-yyyy-hh-mm').csv"
+    $intersectList | Export-Csv -NoTypeInformation -Force -Path $resPath
+}
+else {
+    $fullLists = Import-Csv $fPaths
+    $cols = (($fullLists)[0].PSObject.Properties | Select-Object -ExpandProperty Name)
+    $intersectList = $fullLists | Group-Object -Property $cols | Where-Object { $_.Count -eq ($fPaths.Count) } | ForEach-Object { $_.Group | Sort-Object -Unique }
+    $resPath = Join-Path ($inputDir) "res-$(Get-Date -Format 'dd-MM-yyyy-hh-mm').csv"
+    $intersectList | Export-Csv -NoTypeInformation -Force -Path $resPath
+}
+
 # $filePath = $fPaths # or $filePath = $resPath
 
 
@@ -149,11 +162,13 @@ $task = {
                 Write-Output $PSItem.ScriptStackTrace
                 $commandOutput = "Command Failed: $($PSItem.tostring())"
                 $commandStatus = 'Failed'
-                if ($attempt -lt $vm.retry) {# retry+1
+                if ($attempt -lt $vm.retry) {
+                    # retry+1
                     Write-Output "Retry will be attempted after a delay of $(30*$attempt) seconds"
                     Start-Sleep -Seconds (30 * $attempt)
                 }
-                elseif ($attempt -eq $vm.retry) {# retry+1
+                elseif ($attempt -eq $vm.retry) {
+                    # retry+1
                     Write-Output "Retried $($attempt) times but it failed. Please check $($vm.Name)"
                 }
             }
@@ -197,7 +212,7 @@ $Global:errorFile = @()
 
 $maxJobCount = @($maxJob, 30) | Where-Object { ($_ -ne '') -and ($_ -ne $null) -and ($_.GetType().ToString() -eq 'System.Int32') } | Select-Object -First 1
 
-$reportPaths = @($reportPath, $PSScriptRoot, ($PWD.Path), $HOME, $env:TEMP, 'C:\Temp','C:\')
+$reportPaths = @($reportPath, $PSScriptRoot, ($PWD.Path), $HOME, $env:TEMP, 'C:\Temp', 'C:\')
 $wrkdir = $reportPaths | Where-Object { ($_ -ne '') -and ($_ -ne $null) -and (Test-Path -Path $_ -PathType Container) } | Select-Object -First 1
 
 Set-Location $wrkdir
@@ -209,15 +224,15 @@ $optionToAdd.Add("reportTempDir", (Join-Path $wrkdir $reportTempDir))
 
 ### Checking for headers in CSV file. Headers should be Name,ResourceGroup,Subscription ###
 $columns = "Name,ResourceGroup,Subscription"
-$fps = @($filePath,$fPaths) | Where-Object {$_.GetType().ToString() -eq 'System.Object[]'} | Select-Object -First 1
-$validateFiles = $fps | Where-Object { (Get-Content $_)[0] -notmatch ('(.+,{1})?'+$columns+'(,.+)?$') }
+$fps = @($filePath, $fPaths) | Where-Object { $_.GetType().ToString() -eq 'System.Object[]' } | Select-Object -First 1
+$validateFiles = $fps | Where-Object { (Get-Content $_)[0] -notmatch ('(.+,{1})?' + $columns + '(,.+)?$') }
 if (($validateFiles | Measure-Object).Count -gt 0) {
     Write-Output "Please check headers in the files:"
     Write-Output ($validateFiles -join ",`n")
     exit
 }
 if ($filePath.GetType().ToString() -eq 'System.String') {
-    if (((Get-Content $filePath)[0] -notmatch ('(.+,{1})?'+$columns+'(,.+)?$'))) {
+    if (((Get-Content $filePath)[0] -notmatch ('(.+,{1})?' + $columns + '(,.+)?$'))) {
         Write-Output "Please check headers of the file: $($filePath)"
         exit
     }
