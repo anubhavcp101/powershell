@@ -25,7 +25,22 @@ $union = $true
 $fPaths = @()
 $fPaths += $filePath
 $resType = ""
-$inputDir = @($PSScriptRoot, ($PWD.Path), $HOME, $env:TEMP, 'C:\Temp') | Where-Object { ($_ -ne '') -and ($null -ne $_) -and (Test-Path -Path $_ -PathType Container) } | Select-Object -First 1 
+$inputDir = @($PSScriptRoot, ($PWD.Path), $HOME, $env:TEMP, 'C:\Temp') | Where-Object { ($_ -ne '') -and ($null -ne $_) -and (Test-Path -Path $_ -PathType Container) } | Select-Object -First 1
+
+$htFilter = @{
+    'prop' = 'value';
+    'prop2' = 'value2'
+}
+$filterOp = "==" # when using 'in~' operator, pass an array @() as value in htfilter
+$filterJoinOp = "and"
+
+$filterString = ''
+if ( ($htFilter.Count -gt 0) -and ($filterOp -notin @('',$null)) -and ($filterJoinOp -notin @('',$null)) ) {
+    $filterStr = @()
+    $htFilter.Keys | ForEach-Object { $filterStr += if ($filterOp -in @('in','in~','!in','!in~')) {"$($_) $($filterOp) "+ "(`"" + ($htFilter[$_] -join "`",`"") + "`")"} else { "`"$($_)`" == `"$($htFilter[$_])`"" } }
+    $filterString = "| where " + ($filterStr -join " $($filterJoinOp) ")
+}
+
 if ($subs.Count -gt 0) {
 
     $allSubs = Get-AzSubscription
@@ -40,7 +55,7 @@ if ($subs.Count -gt 0) {
         $subsQuery = @"
 Resources 
 | where subscriptionid in~ ($($qString))
-| where type == `"$($resType)`"
+| where type == `"$($resType)`" $($filterString)
 | project Name=name, ResourceGroup=resourcegroup, Subscription = subscriptionId
 "@
         $data = Search-AzGraph -Query $subsQuery -UseTenantScope -First 1000
@@ -60,7 +75,7 @@ if ($rgs.Count -gt 0) {
         $ErrorActionPreference = 'Stop'
         $qString = "`"" + ( $rgs -join "`",`"" ) + "`""
         $rgQuery = @"
-Resources | where resourcegroup in~ ($($qString)) | where type == `"$($resType)`"
+Resources | where resourcegroup in~ ($($qString)) | where type == `"$($resType)`" $($filterString)
 | project Name=name, ResourceGroup=resourcegroup, Subscription=subscriptionId
 "@
         $data = Search-AzGraph -Query $rgQuery -UseTenantScope -First 1000
@@ -85,7 +100,7 @@ if ($tag.Count -gt 0) {
         }
         $joinTagStr = $tagStrings -join " and "
         $tagQuery = @"
-Resources | where $($joinTagStr) | where type == `"$($resType)`"
+Resources | where $($joinTagStr) | where type == `"$($resType)`" $($filterString)
 | project Name=name,ResourceGroup=resourcegroup,Subscription=subscriptionId
 "@
         $data = Search-AzGraph -Query $tagQuery -UseTenantScope -First 1000

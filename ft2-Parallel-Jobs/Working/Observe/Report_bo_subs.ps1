@@ -44,7 +44,7 @@ Resources
         $data = Search-AzGraph -Query $subsQuery -UseTenantScope -First 1000
         $fPath = Join-Path ($inputDir) "input-subs-$(Get-Date -Format 'dd-MM-yyyy-hh-mm').csv"
         $data.Data | Export-Csv -NoTypeInformation -Force -Path $fPath
-        $fPaths += $fPaths
+        $fPaths += $fPath
 
     }
     catch {
@@ -88,7 +88,7 @@ Resources | where $($joinTagStr) | where type == `"$($resType)`"
 "@
         $data = Search-AzGraph -Query $tagQuery -UseTenantScope -First 1000
         $fPath = Join-Path ($inputDir) "input-tag-$(Get-Date -Format 'dd-MM-yyyy-hh-mm').csv"
-        $fPaths += $fPaths
+        $fPaths += $fPath
         $data.Data | Export-Csv -NoTypeInformation -Force -Path $fPath
     }
     catch {
