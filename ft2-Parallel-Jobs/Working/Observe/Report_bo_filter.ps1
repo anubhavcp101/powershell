@@ -21,11 +21,7 @@ $tag = @{'Key' = 'Value' }
 Connect-AzAccount
 
 $union = $true
-
-$fPaths = @()
-$fPaths += $filePath
 $resType = ""
-$inputDir = @($PSScriptRoot, ($PWD.Path), $HOME, $env:TEMP, 'C:\Temp') | Where-Object { ($_ -ne '') -and ($null -ne $_) -and (Test-Path -Path $_ -PathType Container) } | Select-Object -First 1
 
 $htFilter = @{
     'prop' = 'value';
@@ -40,6 +36,10 @@ if ( ($htFilter.Count -gt 0) -and ($filterOp -notin @('',$null)) -and ($filterJo
     $htFilter.Keys | ForEach-Object { $filterStr += if ($filterOp -in @('in','in~','!in','!in~')) {"$($_) $($filterOp) "+ "(`"" + ($htFilter[$_] -join "`",`"") + "`")"} else { "`"$($_)`" == `"$($htFilter[$_])`"" } }
     $filterString = "| where " + ($filterStr -join " $($filterJoinOp) ")
 }
+
+$inputDir = @($PSScriptRoot, ($PWD.Path), $HOME, $env:TEMP, 'C:\Temp') | Where-Object { ($_ -ne '') -and ($null -ne $_) -and (Test-Path -Path $_ -PathType Container) } | Select-Object -First 1
+$fPaths = @()
+if (($filePath -ne '') -and ($null -ne $filePath) -and (Test-Path -Path $filePath -PathType Leaf)) {$fPaths += $filePath}
 
 if ($subs.Count -gt 0) {
 

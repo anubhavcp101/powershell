@@ -20,9 +20,10 @@ $tag = @{'Key' = 'Value' }
 
 Connect-AzAccount
 
-$fPaths = @()
-$fPaths += $filePath
 $resType = ""
+
+$fPaths = @()
+if (($filePath -ne '') -and ($null -ne $filePath) -and (Test-Path -Path $filePath -PathType Leaf)) {$fPaths += $filePath}
 $inputDir = @($PSScriptRoot,($PWD.Path),$HOME,$env:TEMP,'C:\Temp') | Where-Object { ($_ -ne '') -and ($null -ne $_) -and (Test-Path -Path $_ -PathType Container)} | Select-Object -First 1 
 if ($subs.Count -gt 0) {
 
