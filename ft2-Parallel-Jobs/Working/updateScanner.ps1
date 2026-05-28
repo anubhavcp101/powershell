@@ -9,7 +9,7 @@ $updates = foreach ($update in $searchResult.Updates) {
     [PSCustomObject]@{
         Title = $update.Title
         KB = $update.KBArticleIDs -join ","
-        Classification = @(foreach($cate in $update.Categories){ $cate.Name })
+        Classification = @(foreach($cate in $update.Categories){ $cate.Name }) -join ","
         #
         Severity = $update.MsrcSeverity
         RebootNeeded = $update.RebootRequired
