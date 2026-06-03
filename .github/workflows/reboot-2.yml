@@ -1,0 +1,32 @@
+#
+name: Reboot VMs
+on:
+    workflow_dispatch:
+
+permissions:
+    id-token: write
+    contents: read
+
+jobs:
+    prod-reboot:
+        runs-on: ubuntu-latest
+        strategy:
+            max-parallel: 1
+            matrix:
+                vm: [
+                        { name: "vm-A", rg: "rg-X", env: "prod" },
+                        { name: "vm-B", rg: "rg-Y", env: "prod" },
+                        { name: "vm-C", rg: "rg-Z", env: "prod" }
+                ]
+        steps:
+        - name: Install PowerShell
+          uses: PSModule/install-powershell@v1
+          with:
+            Version: 7.5.0
+        - name: Verifying Azure Powershell Module
+          shell: pwsh
+          run: |
+            Write-Host "Hi from the jobs, trying to see if modules are there"
+            Get-InstalledModule Az.Accounts, Az.Compute -ErrorAction Continue
+            Write-Output "Trying to print few values from matrix"
+            Write-Output "This is for ${{ matrix.vm.name }} from ${{ matrix.vm.rg }} of env= ${{ matrix.vm.env }}"
