@@ -56,7 +56,7 @@ jobs:
               uses: PSModule/install-powershell@v1
               with:
                 Version: 7.5.0
-            - name: Running Non-Prod Azure Powershell # skipping 'vm-X' vm using if at step level
+            - name: Running Non-Prod Azure Powershell # skipping 'vm-X' vm using `if` at step level
               if: ${{ !(matrix.vm.name == 'vm-X') }}
               shell: pwsh
               run: |
