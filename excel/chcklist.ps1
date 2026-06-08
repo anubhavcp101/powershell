@@ -13,8 +13,14 @@ $ExcelFile = "$($PWD.Path)\$VMName-DecomChecklist.xlsx"
 # Excel Stuff
 $excel = New-Object -ComObject Excel.Application
 $excel.Visible = $true
+$excel.DisplayAlerts = $false
+
+# Adding a workbook
 $wb = $excel.Workbooks.Add()
+
+# Adding a worksheet 
 $ws = $wb.Worksheets.Item(1)
+
 $ws.range("A1:F2").merge()
 $ws.Range("A1").value = "Title"
 #
