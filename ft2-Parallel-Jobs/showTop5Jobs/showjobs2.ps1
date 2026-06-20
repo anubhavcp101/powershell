@@ -1,20 +1,18 @@
 #
-$filePath = '..\..\vms.csv'
+$filePath = '..\func4ParallelJob\vms.csv'
 $maxJobCount = 11
 $task = {
-    param(
-        $vm,
-        $wrkdir)
-    #
-    Write-Output 'Starting Job for' $vm.Name 
     try {
         $ErrorActionPreference = 'Stop'
         # Use $PSDefaultParameterValues['command:parameter'] = $value to pass value to common parameters
-        Set-Location $wrkdir 
-
+        #
+        Write-Output "This is value of Name: $($Name)"
+        Write-Output "This is value of subscription: $($subscription)"
+        Write-Output "This is value of resourceGroup: $($resourceGroup)"
         Start-Sleep -Seconds 11
-        #Write-Error "This is an error to be printed"
-        Get-Item 'C:\NonExistentFile2.txt' -ErrorAction Stop
+        #
+        # Write-Error "This is an error to be printed"
+        Get-Item 'C:\NonExistentFile.txt' -ErrorAction Stop
     }
     catch {
         throw "An Error Occurred: $($_.Exception.Message)"
@@ -28,6 +26,21 @@ $optionsToAdd = @{
     'OptC' = 'ValC'
 }
 
+$initTask = {
+    param (
+        $tmpVm,
+        $workdir
+    )
+    Set-Location $workdir
+    $ErrorActionPreference = 'Stop'
+
+    $tmpVm.PSObject.Members | Where-Object { $_.MemberType -eq 'NoteProperty' } | ForEach-Object { New-Variable -Name "$($_.Name)".Replace(' ', '') -Value $_.Value }
+
+    Write-Output 'Starting Job for' $vm.Name
+}
+
+$task = [scriptblock]::Create($initTask.ToString() + "`n" + $task.ToString())
+
 
 $Global:jobs = @()
 $Global:jobCounter = 0
@@ -36,7 +49,6 @@ $Global:jobErrors = ''
 $Global:errorFile = @()
 $wrkdir = $PSScriptRoot
 Set-Location $PSScriptRoot
-# $vms = Import-Csv -Path $filePath #-Header "Name"
 
 
 try {
@@ -98,7 +110,6 @@ $vms | ForEach-Object {
 
 while ($true) {
     $currentlyRunningJobs = $Global:jobs | where State -EQ 'Running' | where HasMoreData -EQ $true
-    #Write-Host Current Job is #$currentlyRunningJobs
     if ((($currentlyRunningJobs | Measure-Object).Count -lt $maxJobCount) -and (($jobCounter) -lt $Global:totalJobs)) {
         Write-Host Starting Job of $vms[$Global:jobCounter].Name
         $job = Start-Job -Name $vms[$Global:jobCounter].Name -ScriptBlock $task -ArgumentList $vms[$Global:jobCounter], $wrkdir 
@@ -165,22 +176,20 @@ Start-Sleep -Seconds 5
             }
             Stop-Transcript
             $failedJobs = $Global:jobs | where State -EQ 'Failed' | where HasMoreData -EQ $true
+            $failedJobs | ft Name, State, Id, @{n = 'Reason'; e = { ($_.ChildJobs.JobStateInfo.Reason -join ';') -replace '^System.Management.Automation.RemoteException:', '' } } -Wrap | Out-File -FilePath "./$folderName/failingJobs.txt"
             if (($failedJobs | Measure-Object).Count -gt 0) {
                 Write-Host Following Jobs Failed. Please Check
                 Write-Host ($failedJobs | Measure-Object).Count jobs failed out of $Global:totalJobs jobs
                 $failedJobs | Select-Object Id, Name, State, HasMoreData | Format-Table -AutoSize -RepeatHeader
                 $failedJobs | Select-Object Id, Name, State | Export-Csv -Path "./$folderName/listOfFailedJobs.csv" -NoTypeInformation -Force
-                # Start-Transcript -Path "./failedJobs.txt" -Force
                 'jobName,Error' | Out-File -FilePath "./$folderName/failedJobError.csv" -Force
                 $failedJobs | ForEach-Object {
                     ($_ | Select-Object Id, Name, State, HasMoreData | Format-Table -AutoSize -HideTableHeaders)
-                    # $errorDetails = (Receive-Job -Job $_ -Keep) 
                     $errorDetails = $_.ChildJobs.JobStateInfo.Reason -join ';'
                     Write-Host $errorDetails
                     $_.Name + ',' + $errorDetails | Out-File -FilePath "./$folderName/failedJobError.csv" -Append -Force 
                 }
                 Write-Host ($failedJobs | Measure-Object).Count jobs failed out of $Global:totalJobs jobs
-                # Stop-Transcript
             }
             Write-Host All Jobs Finished
             Write-Host ($failedJobs | Measure-Object).Count jobs failed out of $Global:totalJobs jobs
@@ -190,7 +199,6 @@ Start-Sleep -Seconds 5
     }
     else {
         $currentJobs = $Global:jobs | where State -EQ 'Running' | where HasMoreData -EQ $true
-        #Write-Host $currentJobs 
         ###
         $currentJobs | ForEach-Object {
             Receive-Job -Keep -Job $_ *>&1 | Out-File -Force -FilePath "$($folderName)\$($_.Name).txt" -ErrorVariable outFileError
