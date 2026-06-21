@@ -17,7 +17,7 @@ $task = {
     catch {
         throw "An Error Occurred: $($_.Exception.Message)"
     }
-    Write-Output 'Finished Job for' $vm.Name
+    Write-Output 'Finished Job for' $Name
 }
 #
 $optionsToAdd = @{
