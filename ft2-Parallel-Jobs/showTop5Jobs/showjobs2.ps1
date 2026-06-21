@@ -36,7 +36,7 @@ $initTask = {
 
     $tmpVm.PSObject.Members | Where-Object { $_.MemberType -eq 'NoteProperty' } | ForEach-Object { New-Variable -Name "$($_.Name)".Replace(' ', '') -Value $_.Value }
 
-    Write-Output 'Starting Job for' $vm.Name
+    Write-Output 'Starting Job for' $tmpVm.Name
 }
 
 $task = [scriptblock]::Create($initTask.ToString() + "`n" + $task.ToString())
@@ -96,6 +96,7 @@ New-Item -Path "$($wrkdir)\$($folderName)\outputXml" -ItemType Directory -Force 
 #<> Top 5 Failed Jobs
 $showFailedJob = $true
 $failFlag = 2
+$proc = $null
 #<>
 
 
@@ -154,7 +155,7 @@ Start-Sleep -Seconds 5
                 $bytes = [System.Text.Encoding]::Unicode.GetBytes($command)
                 $encodedCommand = [Convert]::ToBase64String($bytes)
                 if ($showFailedJob) {
-                    Start-Process powershell.exe -ArgumentList '-NoExit', '-EncodedCommand', $encodedCommand
+                    $proc = Start-Process powershell.exe -ArgumentList '-NoExit', '-EncodedCommand', $encodedCommand -PassThru
                 }
             }
 
@@ -195,8 +196,12 @@ Start-Sleep -Seconds 5
 "@
                 $encoded = [Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($command))
                 if ($showFailedJob) {
-                    Start-Process powershell.exe -ArgumentList '-NoExit', '-EncodedCommand', $encoded
+                    $proc = Start-Process powershell.exe -ArgumentList '-NoExit', '-EncodedCommand', $encoded -PassThru
                 }
+            }
+            if ($null -ne $proc) {
+                Stop-Process -Id $proc.Id
+                $failedJobs | Select-Object Name, State, Id, @{n = 'Reason'; e = { ($_.ChildJobs.JobStateInfo.Reason -join ';') -replace '^System.Management.Automation.RemoteException:', '' } }, @{n = 'Output'; e = { Get-Content "$($folderName)\$($_.Name).txt" } } | Out-GridView -Title 'Failed Jobs'
             }
             #<>
             if (($failedJobs | Measure-Object).Count -gt 0) {
@@ -250,7 +255,7 @@ Start-Sleep -Seconds 5
             $bytes = [System.Text.Encoding]::Unicode.GetBytes($command)
             $encodedCommand = [Convert]::ToBase64String($bytes)
             if ($showFailedJob) {
-                Start-Process powershell.exe -ArgumentList '-NoExit', '-EncodedCommand', $encodedCommand
+                $proc = Start-Process powershell.exe -ArgumentList '-NoExit', '-EncodedCommand', $encodedCommand -PassThru
             }
         }
         #<>
