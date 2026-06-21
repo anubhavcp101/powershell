@@ -94,6 +94,7 @@ New-Item -Path "$($wrkdir)\$($folderName)" -ItemType Directory -Force | Out-Null
 New-Item -Path "$($wrkdir)\$($folderName)\outputXml" -ItemType Directory -Force | Out-Null
 
 #<> Top 5 Failed Jobs
+$showFailedJob = $true
 $failFlag = 2
 #<>
 
@@ -152,7 +153,9 @@ Start-Sleep -Seconds 5
                 #
                 $bytes = [System.Text.Encoding]::Unicode.GetBytes($command)
                 $encodedCommand = [Convert]::ToBase64String($bytes)
-                Start-Process powershell.exe -ArgumentList '-NoExit', '-EncodedCommand', $encodedCommand
+                if ($showFailedJob) {
+                    Start-Process powershell.exe -ArgumentList '-NoExit', '-EncodedCommand', $encodedCommand
+                }
             }
 
             #<>
@@ -176,7 +179,26 @@ Start-Sleep -Seconds 5
             }
             Stop-Transcript
             $failedJobs = $Global:jobs | where State -EQ 'Failed' | where HasMoreData -EQ $true
-            $failedJobs | ft Name, State, Id, @{n = 'Reason'; e = { ($_.ChildJobs.JobStateInfo.Reason -join ';') -replace '^System.Management.Automation.RemoteException:', '' } } -Wrap | Out-File -FilePath "./$folderName/failingJobs.txt"
+            #<>
+            if (($failedJobs | Measure-Object).Count -gt 0) {
+                $failedJobs | ft Name, State, Id, @{n = 'Reason'; e = { ($_.ChildJobs.JobStateInfo.Reason -join ';') -replace '^System.Management.Automation.RemoteException:', '' } } -Wrap | Out-File -FilePath "./$folderName/failingJobs.txt"
+                $failFlag++
+            }
+            if ($failFlag -eq 3) {
+                $fPath = "./$folderName/failingJob.txt"
+                $command = @"
+while(`$true) {
+Clear-Host
+Get-Content `"$fPath`"
+Start-Sleep -Seconds 5
+}
+"@
+                $encoded = [Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($command))
+                if ($showFailedJob) {
+                    Start-Process powershell.exe -ArgumentList '-NoExit', '-EncodedCommand', $encoded
+                }
+            }
+            #<>
             if (($failedJobs | Measure-Object).Count -gt 0) {
                 Write-Host Following Jobs Failed. Please Check
                 Write-Host ($failedJobs | Measure-Object).Count jobs failed out of $Global:totalJobs jobs
@@ -227,7 +249,9 @@ Start-Sleep -Seconds 5
             #
             $bytes = [System.Text.Encoding]::Unicode.GetBytes($command)
             $encodedCommand = [Convert]::ToBase64String($bytes)
-            Start-Process powershell.exe -ArgumentList '-NoExit', '-EncodedCommand', $encodedCommand
+            if ($showFailedJob) {
+                Start-Process powershell.exe -ArgumentList '-NoExit', '-EncodedCommand', $encodedCommand
+            }
         }
         #<>
         $currentJobs | Select-Object Id, Name, State, @{n = 'Timer(Sec)'; e = { ((Get-Date) - $_.PSBeginTime).Seconds } } | Format-Table -AutoSize -RepeatHeader
