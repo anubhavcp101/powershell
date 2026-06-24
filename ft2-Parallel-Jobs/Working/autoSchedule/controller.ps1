@@ -33,7 +33,7 @@ foreach ( $date in $dates) {
 
 get-azAutomationSchedule -ResourceGroupName $rg -AutomationAccountName $automationAccountName | Where-Object { $_.Name -match 'OneTimeSchedule-\d{1}-\d{4}-\d{1}' } | Where-Object { $_.NextRun.DateTime -lt (Get-Date) }
 
-get-azAutomationSchedule -ResourceGroupName $rg -AutomationAccountName $automationAccountName | Where-Object { $_.Name -match 'OneTimeSchedule-\d{1}-\d{4}-\d{1}' } | Where-Object { $_.NextRun.DateTime -lt (Get-Date) } | Where-Object { $_.Frequency -eq 'Onetime' } | measure
+get-azAutomationSchedule -ResourceGroupName $rg -AutomationAccountName $automationAccountName | Where-Object { $_.Name -match 'OneTimeSchedule-\d{1}-\d{4}-\d{1}' } | Where-Object { $null -eq $_.NextRun } | Where-Object { $_.Frequency -eq 'Onetime' } | measure
 
 # and removing them
 get-azAutomationSchedule -ResourceGroupName $rg -AutomationAccountName $automationAccountName | Where-Object { $_.Name -match 'OneTimeSchedule-\d{1}-\d{4}-\d{1}' } | Where-Object { $_.NextRun.DateTime -gt (Get-Date) } | Where-Object { $_.Frequency -eq 'Onetime' } | Remove-AzAutomationSchedule -Force
