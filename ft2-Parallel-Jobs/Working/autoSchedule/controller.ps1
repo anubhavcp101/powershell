@@ -24,7 +24,7 @@ foreach ( $date in $dates) {
     $counter++
     New-AzAutomationSchedule -Name $scheduleName -StartTime $date -TimeZone 'India Standard Time' -ResourceGroupName $rg -AutomationAccountName $automationAccountName -OneTime
 
-    Register-AzAutomationScheduledRunbook -ScheduleName $scheduleName -RunbookName $targetRunbook -ResourceGroupName $rg -AutomationAccountName $automationAccountName
+    Register-AzAutomationScheduledRunbook -ScheduleName $scheduleName -RunbookName $targetRunbook -ResourceGroupName $rg -AutomationAccountName $automationAccountName -Parameters @{'messages'= @('New3','Mew3','Few3')}
 
 }
 
