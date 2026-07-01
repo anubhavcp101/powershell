@@ -1,0 +1,55 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "metadata": {
+        "_generator": {
+            "name": "bicep",
+            "version": "0.25.53.49325",
+            "templateHash": "16704138909949665309"
+        }
+    },
+    "parameters": {
+        "roleName": {
+            "type": "string",
+            "defaultValue": "Custom Role - Manage Snapshots",
+            "metadata": {
+                "description": "To Manage Snapshots"
+            }
+        },
+        "roleDescription": {
+            "type": "string",
+            "defaultValue": "To Manage Snapshots",
+            "metadata": {
+                "description": "Detailed description of the role definition"
+            }
+        }
+    },
+    "variables": {
+        "roleDefName": "[guid(parameters('roleName'))]"
+    },
+    "resources": [
+        {
+            "type": "Microsoft.Authorization/roleDefinitions",
+            "apiVersion": "2022-04-01",
+            "name": "[variables('roleDefName')]",
+            "properties": {
+                "roleName": "[parameters('roleName')]",
+                "description": "[parameters('roleDescription')]",
+                "type": "customRole",
+                "permissions": [
+                    {
+                        "actions": [
+                            "Microsoft.Compute/snapshots/*",
+                            "Microsoft.Compute/disks/read",
+                            "Microsoft.Compute/virtualMachines/read"
+                        ],
+                        "notActions": []
+                    }
+                ],
+                "assignableScopes": [
+                    "[subscription().id]"
+                ]
+            }
+        }
+    ]
+}
