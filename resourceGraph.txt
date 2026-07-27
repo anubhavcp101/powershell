@@ -165,5 +165,30 @@ recoveryservicesresources
 | where properties.protectionStateDescription == "Failover completed" or properties.providerSpecificDetails.vmProtectionStateDescription == "Failover completed"
 | project VM = tolower(tostring(properties.friendlyName))
 
+// to add Subcription Name column given that it already have a subscriptionid column
+| join kind=leftouter (resourcecontainers
+| where type == "microsoft.resources/subscriptions"
+| project subscriptionId, Subscription = name) on subscriptionId
+| project-away subscriptionId, subscriptionId1
+
+// to get result from patch assessments to know KB applicable
+patchassessmentresources
+| where type == "microsoft.compute/virtualmachines/patchassessmentresults/softwarepatches" and isnotempty(properties.kbId )
+| project patchName = tostring(properties.patchName), kbId = tostring(properties.kbId), class = strcat_array(properties.classifications,", "), OSifFound = extract("(Windows Server \\d{4})",1, tostring(properties.patchName)), PublishedDate = tostring(properties.publishedDateTime), RebootBehavior = tostring(properties.rebootBehavior), vmid = tolower(strcat_array(array_slice(split(id,"/"),0,8),"/"))
+| where class == "Security"
+| join kind=fullouter (
+resources
+| where type == "microsoft.compute/virtualmachines"
+| project name, osName = tostring(properties.extended.instanceView.osName), vmid = tolower(id) ) on vmid
+| where isnotempty( patchName)
+| summarize by Patch_Name =patchName,Kb_Id = kbId, PublishedDate, RebootBehavior,OSName = osName, Classification = class  
+
+// to get failed backup jobs 
+recoveryservicesresources
+| where type == "microsoft.recoveryservices/vaults/backupjobs" and properties.dataSourceType == "Microsoft.Compute/virtualMachines"
+| where properties.status == "Failed"
+| extend st = todatetime(properties.startTime)
+| where st >= ago(24h)
+
 // --------------------------------
 
