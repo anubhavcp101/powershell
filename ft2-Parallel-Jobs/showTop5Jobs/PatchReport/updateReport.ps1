@@ -22,9 +22,9 @@ $task = {
         $osName = $hostInfo.Caption
         $outputs = @($serverName, $osName, $hotfix, $uptime)
         #
-        Write-Output ($outputs -join ',')
+        Write-Output ($outputs -join '#')
     }
-    $ctx = Set-AzContext -Subscription $subscription.trim() -ErrorAction Stop
+    $ctx = Set-AzContext -Subscription $subscription.trim() -ErrorAction Stop -Scope Process
     $vmStatus = Get-AzVM -Status -Name $Name.trim() -ResourceGroupName $resourceGroup.trim() -DefaultProfile $ctx -ErrorAction Stop
     if (($vmStatus.Statuses[1].DisplayStatus -ne 'VM running') -or ( -not ($vmStatus.VMAgent)) ) {
         Write-Output "The VM is not running. Please check $($vm.Name.trim())"
@@ -57,12 +57,12 @@ $task = {
                 Write-Output $PSItem.ScriptStackTrace
                 $commandOutput = "Command Failed: $($PSItem.tostring())"
                 $commandStatus = 'Failed'
-                if ($attempt -lt $vm.retry) {
+                if ($attempt -lt $retry) {
                     # retry+1
                     Write-Output "Retry will be attempted after a delay of $(30*$attempt) seconds"
                     Start-Sleep -Seconds (30 * $attempt)
                 }
-                elseif ($attempt -eq $vm.retry) {
+                elseif ($attempt -eq $retry) {
                     # retry+1
                     Write-Output "Retried $($attempt) times but it failed. Please check $($Name)"
                 }
@@ -93,7 +93,7 @@ $task = {
 $optionsToAdd = @{
 }
 $retry = 3 # 0 will disabled it.
-$optionToAdd.Add('retry', $retry)
+$optionsToAdd.Add('retry', $retry)
 
 $initTask = {
     param (
@@ -127,12 +127,12 @@ Set-Location $wrkdir
 
 $reportTempDir = "Report-Temp-$(Get-Date -Format 'dd-MM-yyyy-hh-mm')"
 New-Item -Path (Join-Path $wrkdir $reportTempDir) -ItemType Directory -Force -ErrorAction Stop | Out-Null
-$optionToAdd.Add('reportTempDir', (Join-Path $wrkdir $reportTempDir))
+$optionsToAdd.Add('reportTempDir', (Join-Path $wrkdir $reportTempDir))
 
-if (((Get-Content $filePath)[0] -notmatch '(.+,{1})?Name,ResourceGroup,Subscription(,.+)?$')) {
-    Write-Output 'Please check headers in the csv file'
-    exit
-}
+# if (((Get-Content $filePath)[0] -notmatch '(.+,{1})?Name,ResourceGroup,Subscription(,.+)?$')) {
+#     Write-Output 'Please check headers in the csv file'
+#     exit
+# }
 
 
 try {
@@ -358,9 +358,34 @@ Clear-Variable 'vars'
 Write-Output 'Processing'
 
 Set-Location (Join-Path $wrkdir $reportTempDir) 
-$VmOutputs = Import-Csv -Path (Get-ChildItem -Path . -Filter *.csv) -Header @('VMName','commandStatus','ServerName','OS','Patches','Uptime')
+$VmOutputs = Import-Csv -Path (Get-ChildItem -Path . -Filter *.csv) #-Header @('VMName','commandStatus','ServerName','OS','Patches','Uptime')
+
+$report = foreach($output in $VmOutputs) {
+    if ($output.CommandStatus -eq 'Success') {
+        $outputDetails = $output.CommandOutput -split "#"
+        [PSCustomObject]@{
+            "VMName" = $output.VM 
+            "HostName" = $outputDetails[0]
+            "OS" = $outputDetails[1]
+            "Patches" = $outputDetails[2]
+            "Uptime" = $outputDetails[3]
+            "CommandStatus" = $output.CommandStatus
+            "CommandOutput" = $output.CommandOutput
+        }
+    } else {
+        [PSCustomObject]@{
+            "VMName" = $output.VM 
+            "HostName" = "Error"
+            "OS" = "Error"
+            "Patches" = "Error"
+            "Uptime" = "Error"
+            "CommandStatus" = $output.CommandStatus
+            "CommandOutput" = $output.CommandOutput
+        }
+    }
+}
 
 $reportPath = Join-Path $wrkdir "Report-$(Get-Date -Format 'dd-MM-yyyy-hh-mm').csv"
-$VmOutputs | Export-Csv -NoTypeInformation -Force -Path $reportPath
+$report | Export-Csv -NoTypeInformation -Force -Path $reportPath
 
 Write-Output "Report Generated at: $($reportPath)"

@@ -79,12 +79,12 @@ $task = {
     Write-Host "Finished Job for" $vm.Name
 }
 #
-$optionToAdd = @{
+$optionsToAdd = @{
 
 }
 
 $retry = 3 # 0 will disabled it.
-$optionToAdd.Add('retry', $retry)
+$optionsToAdd.Add('retry', $retry)
 
 
 $Global:jobs = @()
@@ -103,7 +103,7 @@ Set-Location $wrkdir
 
 $reportTempDir = "Report-Temp-$(Get-Date -Format 'dd-MM-yyyy-hh-mm')"
 New-Item -Path (Join-Path $wrkdir $reportTempDir) -ItemType Directory -Force -ErrorAction Stop | Out-Null
-$optionToAdd.Add("reportTempDir", (Join-Path $wrkdir $reportTempDir))
+$optionsToAdd.Add("reportTempDir", (Join-Path $wrkdir $reportTempDir))
 
 if (((Get-Content $filePath)[0] -notmatch '(.+,{1})?Name,ResourceGroup,Subscription(,.+)?$')) {
     Write-Output "Please check headers in the csv file"
@@ -134,11 +134,11 @@ catch {
     exit
 }
 
-if ( (Test-Path Variable:\optionToAdd) -and ($optionToAdd.Count -gt 0)) {
+if ( (Test-Path Variable:\optionsToAdd) -and ($optionsToAdd.Count -gt 0)) {
     try {
         foreach ($instance in $vms) {
-            foreach ($key in $optionToAdd.Keys) {
-                $instance | Add-Member -NotePropertyName "$($key)".Replace(' ', '') -NotePropertyValue $optionToAdd[$key]
+            foreach ($key in $optionsToAdd.Keys) {
+                $instance | Add-Member -NotePropertyName "$($key)".Replace(' ', '') -NotePropertyValue $optionsToAdd[$key]
             }
         }
     }
@@ -253,7 +253,7 @@ while ($true) {
 Get-ChildItem -Path "$($folderName)\outputXml\*.xml" | Select BaseName, @{Name = "ErrMsg"; Exp = { Get-Item -Path $_.fullName | Import-Clixml | Where writeErrorStream -eq $true | Select -ExpandProperty TargetObject } } | Export-Csv -NoTypeInformation -Force -Path "$($folderName)\outputXml\error.csv"
 
 ### Cleaning ###
-$vars = @('vms','vm','maxJobCount','maxJob','currentJobs','failedJobs','jobCounter','folderName','CurrentlyRunningJobs','jobs','totalJobs','optionToAdd','retry')
+$vars = @('vms','vm','maxJobCount','maxJob','currentJobs','failedJobs','jobCounter','folderName','CurrentlyRunningJobs','jobs','totalJobs','optionsToAdd','retry')
 $vars | Where-Object { Test-Path "Variable:\$($_)"} | ForEach-Object { Clear-Variable $_}
 Clear-Variable 'vars'
 
