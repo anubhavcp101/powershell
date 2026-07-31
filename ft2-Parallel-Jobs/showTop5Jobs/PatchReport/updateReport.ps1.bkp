@@ -1,5 +1,5 @@
 #
-$filePath = 'vms.csv'
+$filePath = '..\func4ParallelJob\vms.csv'
 $maxJob = 11 # Number of Jobs needs to run at a time
 $reportPath = '' # It should be a location of a directory, not a file
 
@@ -174,53 +174,8 @@ if ( (Test-Path Variable:\optionsToAdd) -and ($optionsToAdd.Count -gt 0)) {
 }
 
 $folderName = "Run-$(Get-Date -Format 'dd-MM-yyyyThh-mm')"
-New-Item -Path (Join-Path $wrkdir $folderName) -ItemType Directory -Force | Out-Null
-New-Item -Path (Join-Path (Join-Path $wrkdir $folderName) 'outputXml') -ItemType Directory -Force | Out-Null
-
-function Save-JobLog {
-    param (
-        [Parameter(Mandatory = $true)]$JobList,
-        [Parameter(Mandatory = $true)]$TargetFolder
-    )
-    $JobList | ForEach-Object {
-        Receive-Job -Keep -Job $_ *>&1 | Out-File -Force -FilePath (Join-Path $TargetFolder "$($_.Name).txt") -ErrorVariable outFileError
-        Receive-Job -Keep -Job $_ *>&1 | Export-Clixml -Depth 3 -Force -Path (Join-Path (Join-Path $TargetFolder 'outputXml') "$($_.Name).xml") 
-        if ($outFileError) {
-            Receive-Job -Keep -Job $_ *>&1 | Out-File -Force -FilePath (Join-Path $TargetFolder "$($_.Name)-$(Get-Date -Format 'dd-MM-yyyyThh-mm-ss').txt")
-        }
-    }
-}
-
-function Show-FailingJobsWindow {
-    param (
-        [Parameter(Mandatory = $true)]$JobList,
-        [Parameter(Mandatory = $true)]$TargetFolder,
-        [Parameter(Mandatory = $true)][ref]$FailFlagRef,
-        [Parameter(Mandatory = $true)]$ShowFailedJob,
-        $CurrentProc
-    )
-    $failedJobs = $JobList | where State -EQ 'Failed' | where HasMoreData -EQ $true
-    if (($failedJobs | Measure-Object).Count -gt 0) {
-        $failedJobs | ft Name, State, Id, @{n = 'Reason'; e = { ($_.ChildJobs.JobStateInfo.Reason -join ';') -replace '^System.Management.Automation.RemoteException:', '' } } -Wrap | Out-File -FilePath "./$TargetFolder/failingJobs.txt"
-        $FailFlagRef.Value++
-    }
-    if ($FailFlagRef.Value -eq 3) {
-        $fPath = "./$TargetFolder/failingJobs.txt"
-        $command = @"
-while(`$true) {
-Clear-Host
-Get-Content `"$fPath`"
-Start-Sleep -Seconds 5
-}
-"@
-        $bytes = [System.Text.Encoding]::Unicode.GetBytes($command)
-        $encodedCommand = [Convert]::ToBase64String($bytes)
-        if ($ShowFailedJob) {
-            return (Start-Process powershell.exe -ArgumentList '-NoExit', '-EncodedCommand', $encodedCommand -PassThru)
-        }
-    }
-    return $CurrentProc
-}
+New-Item -Path "$($wrkdir)\$($folderName)" -ItemType Directory -Force | Out-Null
+New-Item -Path "$($wrkdir)\$($folderName)\outputXml" -ItemType Directory -Force | Out-Null
 
 #<> Top 5 Failed Jobs
 $showFailedJob = $true
@@ -254,18 +209,52 @@ while ($true) {
         if (($currentJobs | Measure-Object).Count -gt 0) {
             Write-Host 'Currently Waiting for all jobs to be finished'
             Write-Host Currently Running Jobs are:
-            $currentJobs | Select-Object Id, Name, State, @{n = 'Timer(Sec)'; e = { [Math]::Floor(((Get-Date) - $_.PSBeginTime).TotalSeconds) } } | Format-Table -AutoSize -RepeatHeader
+            $currentJobs | Select-Object Id, Name, State, @{n = 'Timer(Sec)'; e = { ((Get-Date) - $_.PSBeginTime).Seconds } } | Format-Table -AutoSize -RepeatHeader
             ###
-            Save-JobLog -JobList $currentJobs -TargetFolder $folderName
+            $currentJobs | ForEach-Object {
+                Receive-Job -Keep -Job $_ *>&1 | Out-File -Force -FilePath "$($folderName)\$($_.Name).txt" -ErrorVariable outFileError
+                Receive-Job -Keep -Job $_ *>&1 | Export-Clixml -Depth 3 -Force -Path "$($folderName)\outputXml\$($_.Name).xml" 
+                if ($outFileError) {
+                    Receive-Job -Keep -Job $_ *>&1 | Out-File -Force -FilePath "$($folderName)\$($_.Name)-$(Get-Date -Format 'dd-MM-yyyyThh-mm-ss').txt"
+                }
+            }
             ###
             #<>
-            $proc = Show-FailingJobsWindow -JobList $Global:jobs -TargetFolder $folderName -FailFlagRef ([ref]$failFlag) -ShowFailedJob $showFailedJob -CurrentProc $proc
+            $currentlyFailedJobs = $Global:jobs | where State -EQ 'Failed' | where HasMoreData -EQ $true
+            if (($currentlyFailedJobs | Measure-Object).Count -gt 0 ) {
+                $currentlyFailedJobs | ft Name, State, Id, @{n = 'Reason'; e = { ($_.ChildJobs.JobStateInfo.Reason -join ';') -replace '^System.Management.Automation.RemoteException:', '' } } -Wrap | Out-File -FilePath "./$folderName/failingJobs.txt"
+                $failFlag++
+            }
+            if ($failFlag -eq 3) {
+                
+                $fPath = "./$folderName/failingJobs.txt"
+                $command = @"
+while(`$true) {
+Clear-Host
+Get-Content `"$fPath`"
+Start-Sleep -Seconds 5
+}
+"@
+                #
+                $bytes = [System.Text.Encoding]::Unicode.GetBytes($command)
+                $encodedCommand = [Convert]::ToBase64String($bytes)
+                if ($showFailedJob) {
+                    $proc = Start-Process powershell.exe -ArgumentList '-NoExit', '-EncodedCommand', $encodedCommand -PassThru
+                }
+            }
+
             #<>
             Start-Sleep -Seconds 30
         }
         else {
             ###
-            Save-JobLog -JobList $Global:jobs -TargetFolder $folderName
+            $Global:jobs | ForEach-Object {
+                Receive-Job -Keep -Job $_ *>&1 | Out-File -Force -FilePath "$($folderName)\$($_.Name).txt" -ErrorVariable outFileError
+                Receive-Job -Keep -Job $_ *>&1 | Export-Clixml -Depth 3 -Force -Path "$($folderName)\outputXml\$($_.Name).xml" 
+                if ($outFileError) {
+                    Receive-Job -Keep -Job $_ *>&1 | Out-File -Force -FilePath "$($folderName)\$($_.Name)-$(Get-Date -Format 'dd-MM-yyyyThh-mm-ss').txt"
+                }
+            }
             ###
             Start-Transcript -Path "./$folderName/allJobs.txt" -Force
             $Global:jobs | ForEach-Object {
@@ -276,10 +265,27 @@ while ($true) {
             Stop-Transcript
             $failedJobs = $Global:jobs | where State -EQ 'Failed' | where HasMoreData -EQ $true
             #<>
-            $proc = Show-FailingJobsWindow -JobList $Global:jobs -TargetFolder $folderName -FailFlagRef ([ref]$failFlag) -ShowFailedJob $showFailedJob -CurrentProc $proc
+            if (($failedJobs | Measure-Object).Count -gt 0) {
+                $failedJobs | ft Name, State, Id, @{n = 'Reason'; e = { ($_.ChildJobs.JobStateInfo.Reason -join ';') -replace '^System.Management.Automation.RemoteException:', '' } } -Wrap | Out-File -FilePath "./$folderName/failingJobs.txt"
+                $failFlag++
+            }
+            if ($failFlag -eq 3) {
+                $fPath = "./$folderName/failingJob.txt"
+                $command = @"
+while(`$true) {
+Clear-Host
+Get-Content `"$fPath`"
+Start-Sleep -Seconds 5
+}
+"@
+                $encoded = [Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($command))
+                if ($showFailedJob) {
+                    $proc = Start-Process powershell.exe -ArgumentList '-NoExit', '-EncodedCommand', $encoded -PassThru
+                }
+            }
             if ($null -ne $proc) {
                 Stop-Process -Id $proc.Id
-                # $failedJobs | Select-Object Name, State, Id, @{n = 'Reason'; e = { ($_.ChildJobs.JobStateInfo.Reason -join ';') -replace '^System.Management.Automation.RemoteException:', '' } }, @{n = 'Output'; e = { Get-Content (Join-Path $folderName "$($_.Name).txt") } } | Out-GridView -Title 'Failed Jobs'
+                $failedJobs | Select-Object Name, State, Id, @{n = 'Reason'; e = { ($_.ChildJobs.JobStateInfo.Reason -join ';') -replace '^System.Management.Automation.RemoteException:', '' } }, @{n = 'Output'; e = { Get-Content "$($folderName)\$($_.Name).txt" } } | Out-GridView -Title 'Failed Jobs'
             }
             #<>
             if (($failedJobs | Measure-Object).Count -gt 0) {
@@ -305,17 +311,43 @@ while ($true) {
     else {
         $currentJobs = $Global:jobs | where State -EQ 'Running' | where HasMoreData -EQ $true
         ###
-        Save-JobLog -JobList $currentJobs -TargetFolder $folderName
+        $currentJobs | ForEach-Object {
+            Receive-Job -Keep -Job $_ *>&1 | Out-File -Force -FilePath "$($folderName)\$($_.Name).txt" -ErrorVariable outFileError
+            Receive-Job -Keep -Job $_ *>&1 | Export-Clixml -Depth 3 -Force -Path "$($folderName)\outputXml\$($_.Name).xml" 
+            if ($outFileError) {
+                Receive-Job -Keep -Job $_ *>&1 | Out-File -Force -FilePath "$($folderName)\$($_.Name)-$(Get-Date -Format 'dd-MM-yyyyThh-mm-ss').txt"
+            }
+        }
         ###
         #<>
-        $proc = Show-FailingJobsWindow -JobList $Global:jobs -TargetFolder $folderName -FailFlagRef ([ref]$failFlag) -ShowFailedJob $showFailedJob -CurrentProc $proc
+        $currentlyFailedJobs = $Global:jobs | where State -EQ 'Failed' | where HasMoreData -EQ $true
+        if (($currentlyFailedJobs | Measure-Object).Count -gt 0 ) {
+            $currentlyFailedJobs | ft Name, State, Id, @{n = 'Reason'; e = { ($_.ChildJobs.JobStateInfo.Reason -join ';') -replace '^System.Management.Automation.RemoteException:', '' } } -Wrap | Out-File -FilePath "./$folderName/failingJobs.txt"
+            $failFlag++
+        }
+        if ($failFlag -eq 3) {
+            
+            $fPath = "./$folderName/failingJobs.txt"
+            $command = @"
+while(`$true) {
+Clear-Host
+Get-Content `"$fPath`"
+Start-Sleep -Seconds 5
+}
+"@
+            #
+            $bytes = [System.Text.Encoding]::Unicode.GetBytes($command)
+            $encodedCommand = [Convert]::ToBase64String($bytes)
+            if ($showFailedJob) {
+                $proc = Start-Process powershell.exe -ArgumentList '-NoExit', '-EncodedCommand', $encodedCommand -PassThru
+            }
+        }
         #<>
-        $currentJobs | Select-Object Id, Name, State, @{n = 'Timer(Sec)'; e = { [Math]::Floor(((Get-Date) - $_.PSBeginTime).TotalSeconds) } } | Format-Table -AutoSize -RepeatHeader
+        $currentJobs | Select-Object Id, Name, State, @{n = 'Timer(Sec)'; e = { ((Get-Date) - $_.PSBeginTime).Seconds } } | Format-Table -AutoSize -RepeatHeader
         Start-Sleep -Seconds 30
     }
 }
-$outputXmlDir = Join-Path $folderName 'outputXml'
-Get-ChildItem -Path (Join-Path $outputXmlDir '*.xml') | Select-Object BaseName, @{Name = 'ErrMsg'; Exp = { Get-Item -Path $_.fullName | Import-Clixml | where writeErrorStream -EQ $true | Select-Object -ExpandProperty TargetObject } } | Export-Csv -NoTypeInformation -Force -Path (Join-Path $outputXmlDir 'error.csv')
+Get-ChildItem -Path "$($folderName)\outputXml\*.xml" | Select-Object BaseName, @{Name = 'ErrMsg'; Exp = { Get-Item -Path $_.fullName | Import-Clixml | where writeErrorStream -EQ $true | Select-Object -ExpandProperty TargetObject } } | Export-Csv -NoTypeInformation -Force -Path "$($folderName)\outputXml\error.csv"
 
 ### Cleaning ###
 $vars = @('vms', 'vm', 'maxJobCount', 'maxJob', 'currentJobs', 'failedJobs', 'jobCounter', 'folderName', 'CurrentlyRunningJobs', 'jobs', 'totalJobs', 'optionToAdd', 'retry')
