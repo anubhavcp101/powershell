@@ -253,7 +253,7 @@ while ($true) {
         # Log currently running jobs as skipped
         $currentRunning = $Global:jobs | Where-Object { $_.State -eq 'Running' }
         foreach ($j in $currentRunning) {
-            [pscustomobject]@{ Name = $j.Name; Id = $j.Id; State = 'Skipped'; Reason = 'Break_Loop flag' } |
+            [PSCustomObject]@{ Name = $j.Name; Id = $j.Id; State = 'Skipped'; Reason = 'Break_Loop flag' } |
             Export-Csv -Path $skipLog -NoTypeInformation -Append -Force
         }
         Remove-Item -Path (Join-Path $wrkdir 'Break_Loop') -Force -ErrorAction SilentlyContinue
@@ -279,6 +279,7 @@ while ($true) {
                 if ($job -and $job.State -eq 'Running') {
                     Stop-Job -Id $jobId #-Force
                     Write-Host "Job $jobId stopped via flag file $($file.Name)."
+                    [PSCustomObject]@{Name = $job.Name; Id = $job.Id; State = $job.State; Reason = "Stopped using per-job flag"} | Export-Csv -Path $stopLog -NoTypeInformation -Append -Force
                 }
                 Remove-Item $file.FullName -Force -ErrorAction SilentlyContinue
             }
@@ -292,7 +293,7 @@ while ($true) {
                 $elapsed = (Get-Date) - $_.PSBeginTime
                 if ($elapsed.TotalSeconds -gt $jobTimeoutSec) {
                     Stop-Job -Id $_.Id #-Force
-                    $timeoutInfo = [PSCustomObject]@{ Name = $_.Name; Id = $_.Id; State = $_.State; Reason = 'Timeout after 30 minutes' }
+                    $timeoutInfo = [PSCustomObject]@{ Name = $_.Name; Id = $_.Id; State = $_.State; Reason = 'Job Timed Out' }
                     $timeoutInfo | Export-Csv -Path $timeoutLog -NoTypeInformation -Append -Force
                     Write-Host "Job $($_.Name) timed out and was stopped."
                 }
@@ -355,6 +356,7 @@ while ($true) {
                 if ($job -and $job.State -eq 'Running') {
                     Stop-Job -Id $jobId #-Force
                     Write-Host "Job $jobId stopped via flag file $($file.Name)."
+                    [PSCustomObject]@{Name = $job.Name; Id = $job.Id; State = $job.State; Reason = "Stopped using per-job flag"} | Export-Csv -Path $stopLog -NoTypeInformation -Append -Force
                 }
                 Remove-Item $file.FullName -Force -ErrorAction SilentlyContinue
             }
@@ -364,7 +366,7 @@ while ($true) {
             $elapsed = (Get-Date) - $_.PSBeginTime
             if ($elapsed.TotalSeconds -gt $jobTimeoutSec) {
                 Stop-Job -Id $_.Id #-Force
-                $timeoutInfo = [PSCustomObject]@{ Name = $_.Name; Id = $_.Id; State = $_.State; Reason = 'Timeout after 30 minutes' }
+                $timeoutInfo = [PSCustomObject]@{ Name = $_.Name; Id = $_.Id; State = $_.State; Reason = 'Job Timed Out' }
                 $timeoutInfo | Export-Csv -Path $timeoutLog -NoTypeInformation -Append -Force
                 Write-Host "Job $($_.Name) timed out and was stopped."
             }
@@ -426,6 +428,10 @@ Write-Output "Report Generated at: $($reportPath)"
 # Combine all status logs into a central summary
 $summaryFile = Join-Path $folderName 'jobSummary.csv'
 # 'Name,Id,State,Reason' | Out-File -FilePath $summaryFile -Encoding utf8 -Force
+# if (Test-Path $skipLog) {
+#     $compare = Compare-Object -ReferenceObject $vms.Name -DifferenceObject $jobs.Name
+# }
+
 $logFiles = @($timeoutLog, $skipLog, $stopLog,(Join-Path $folderName 'failedJobError.csv'))
 foreach ($lf in $logFiles) {
     if (Test-Path $lf) { Import-Csv $lf | Export-Csv -Path $summaryFile -NoTypeInformation -Append -Force }
