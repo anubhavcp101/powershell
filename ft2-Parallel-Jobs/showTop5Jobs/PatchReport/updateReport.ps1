@@ -178,11 +178,11 @@ $folderName = "Run-$(Get-Date -Format 'dd-MM-yyyyThh-mm')"
 New-Item -Path (Join-Path $wrkdir $folderName) -ItemType Directory -Force | Out-Null
 New-Item -Path (Join-Path (Join-Path $wrkdir $folderName) 'outputXml') -ItemType Directory -Force | Out-Null
 $timeoutLog = Join-Path $folderName 'timeoutJobs.csv'
-'Name,Id,State,Reason' | Out-File -FilePath $timeoutLog -Encoding utf8 -Force
+# 'Name,Id,State,Reason' | Out-File -FilePath $timeoutLog -Encoding utf8 -Force
 $skipLog = Join-Path $folderName 'skippedJobs.csv'
-'Name,Id,State,Reason' | Out-File -FilePath $skipLog -Encoding utf8 -Force
+# 'Name,Id,State,Reason' | Out-File -FilePath $skipLog -Encoding utf8 -Force
 $stopLog = Join-Path $folderName 'stoppedJobs.csv'
-'Name,Id,State,Reason' | Out-File -FilePath $stopLog -Encoding utf8 -Force
+# 'Name,Id,State,Reason' | Out-File -FilePath $stopLog -Encoding utf8 -Force
 
 function Save-JobLog {
     param (
@@ -414,7 +414,7 @@ $report | Export-Csv -NoTypeInformation -Force -Path $reportPath
 Write-Output "Report Generated at: $($reportPath)"
 # Combine all status logs into a central summary
 $summaryFile = Join-Path $folderName 'jobSummary.csv'
-'Name,Id,State,Reason' | Out-File -FilePath $summaryFile -Encoding utf8 -Force
+# 'Name,Id,State,Reason' | Out-File -FilePath $summaryFile -Encoding utf8 -Force
 $logFiles = @($timeoutLog, $skipLog, $stopLog)
 foreach ($lf in $logFiles) {
     if (Test-Path $lf) { Import-Csv $lf | Export-Csv -Path $summaryFile -NoTypeInformation -Append -Force }
