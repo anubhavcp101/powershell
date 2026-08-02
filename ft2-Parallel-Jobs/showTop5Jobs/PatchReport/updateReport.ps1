@@ -428,11 +428,16 @@ Write-Output "Report Generated at: $($reportPath)"
 # Combine all status logs into a central summary
 $summaryFile = Join-Path $folderName 'jobSummary.csv'
 # 'Name,Id,State,Reason' | Out-File -FilePath $summaryFile -Encoding utf8 -Force
-# if (Test-Path $skipLog) {
-#     $compare = Compare-Object -ReferenceObject $vms.Name -DifferenceObject $jobs.Name
-# }
+$notStartedLog = Join-Path $folderName 'notStartedJobs.csv'
+if (Test-Path $skipLog) {
+    $notStartedJobs = Compare-Object -ReferenceObject $vms.Name -DifferenceObject $jobs.Name | Where-Object {$_.SideIndicator.ToString() -eq '<='}
+    foreach ( $job in $notStartedJobs) {
+        [PSCustomObject]@{Name=$job.InputObject; Id = 'NA'; State = 'Not Started'; Reason='Not Started as stopped by Break_Loop'} | Export-Csv -Path $notStartedLog -NoTypeInformation -Append -Force
+    }
 
-$logFiles = @($timeoutLog, $skipLog, $stopLog,(Join-Path $folderName 'failedJobError.csv'))
+}
+
+$logFiles = @($timeoutLog, $skipLog, $stopLog,(Join-Path $folderName 'failedJobError.csv'),$notStartedLog)
 foreach ($lf in $logFiles) {
     if (Test-Path $lf) { Import-Csv $lf | Export-Csv -Path $summaryFile -NoTypeInformation -Append -Force }
 }
