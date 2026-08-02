@@ -286,6 +286,16 @@ while ($true) {
             Write-Host 'Currently Waiting for all jobs to be finished'
             Write-Host Currently Running Jobs are:
             $currentJobs | Select-Object Id, Name, State, @{n = 'Timer(Sec)'; e = { [Math]::Floor(((Get-Date) - $_.PSBeginTime).TotalSeconds) } } | Format-Table -AutoSize -RepeatHeader
+            # Timeout handling for running jobs
+            $currentJobs | ForEach-Object {
+                $elapsed = (Get-Date) - $_.PSBeginTime
+                if ($elapsed.TotalSeconds -gt $jobTimeoutSec) {
+                    Stop-Job -Id $_.Id #-Force
+                    $timeoutInfo = [PSCustomObject]@{ Name = $_.Name; Id = $_.Id; State = $_.State; Reason = 'Timeout after 30 minutes' }
+                    $timeoutInfo | Export-Csv -Path $timeoutLog -NoTypeInformation -Append -Force
+                    Write-Host "Job $($_.Name) timed out and was stopped."
+                }
+            }
             ###
             Save-JobLog -JobList $currentJobs -TargetFolder $folderName
             ###
