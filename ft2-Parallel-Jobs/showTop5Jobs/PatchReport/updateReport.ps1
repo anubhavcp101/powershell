@@ -352,7 +352,7 @@ while ($true) {
         $currentJobs | ForEach-Object {
             $elapsed = (Get-Date) - $_.PSBeginTime
             if ($elapsed.TotalSeconds -gt $jobTimeoutSec) {
-                Stop-Job -Id $_.Id -Force
+                Stop-Job -Id $_.Id #-Force
                 $timeoutInfo = [PSCustomObject]@{ Name = $_.Name; Id = $_.Id; State = $_.State; Reason = 'Timeout after 30 minutes' }
                 $timeoutInfo | Export-Csv -Path $timeoutLog -NoTypeInformation -Append -Force
                 Write-Host "Job $($_.Name) timed out and was stopped."
@@ -372,9 +372,9 @@ $outputXmlDir = Join-Path $folderName 'outputXml'
 Get-ChildItem -Path (Join-Path $outputXmlDir '*.xml') | Select-Object BaseName, @{Name = 'ErrMsg'; Exp = { Get-Item -Path $_.fullName | Import-Clixml | where writeErrorStream -EQ $true | Select-Object -ExpandProperty TargetObject } } | Export-Csv -NoTypeInformation -Force -Path (Join-Path $outputXmlDir 'error.csv')
 
 ### Cleaning ###
-$vars = @('vms', 'vm', 'maxJobCount', 'maxJob', 'currentJobs', 'failedJobs', 'jobCounter', 'folderName', 'CurrentlyRunningJobs', 'jobs', 'totalJobs', 'optionToAdd', 'retry')
-$vars | Where-Object { Test-Path "Variable:\$($_)" } | ForEach-Object { Clear-Variable $_ }
-Clear-Variable 'vars'
+# $vars = @('vms', 'vm', 'maxJobCount', 'maxJob', 'currentJobs', 'failedJobs', 'jobCounter', 'folderName', 'CurrentlyRunningJobs', 'jobs', 'totalJobs', 'optionToAdd', 'retry')
+# $vars | Where-Object { Test-Path "Variable:\$($_)" } | ForEach-Object { Clear-Variable $_ }
+# Clear-Variable 'vars'
 
 ### Processing ###
 Write-Output 'Processing'
