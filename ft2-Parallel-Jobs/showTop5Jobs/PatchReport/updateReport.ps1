@@ -256,6 +256,7 @@ while ($true) {
             [pscustomobject]@{ Name = $j.Name; Id = $j.Id; State = 'Skipped'; Reason = 'Break_Loop flag' } |
             Export-Csv -Path $skipLog -NoTypeInformation -Append -Force
         }
+        Remove-Item -Path (Join-Path $wrkdir 'Break_Loop') -Force -ErrorAction SilentlyContinue
         break
     }
     $currentlyRunningJobs = $Global:jobs | where State -EQ 'Running' | where HasMoreData -EQ $true
@@ -276,7 +277,7 @@ while ($true) {
                 $jobId = $Matches[1]
                 $job = Get-Job -Id $jobId -ErrorAction SilentlyContinue
                 if ($job -and $job.State -eq 'Running') {
-                    Stop-Job -Id $jobId -Force
+                    Stop-Job -Id $jobId #-Force
                     Write-Host "Job $jobId stopped via flag file $($file.Name)."
                 }
                 Remove-Item $file.FullName -Force -ErrorAction SilentlyContinue
@@ -352,7 +353,7 @@ while ($true) {
                 $jobId = $Matches[1]
                 $job = Get-Job -Id $jobId -ErrorAction SilentlyContinue
                 if ($job -and $job.State -eq 'Running') {
-                    Stop-Job -Id $jobId -Force
+                    Stop-Job -Id $jobId #-Force
                     Write-Host "Job $jobId stopped via flag file $($file.Name)."
                 }
                 Remove-Item $file.FullName -Force -ErrorAction SilentlyContinue
