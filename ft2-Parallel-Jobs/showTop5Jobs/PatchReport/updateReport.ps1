@@ -328,13 +328,13 @@ while ($true) {
                 Write-Host Following Jobs Failed. Please Check
                 Write-Host ($failedJobs | Measure-Object).Count jobs failed out of $Global:totalJobs jobs
                 $failedJobs | Select-Object Id, Name, State, HasMoreData | Format-Table -AutoSize -RepeatHeader
-                $failedJobs | Select-Object Id, Name, State | Export-Csv -Path "./$folderName/listOfFailedJobs.csv" -NoTypeInformation -Force
-                'jobName,Error' | Out-File -FilePath "./$folderName/failedJobError.csv" -Force
+                $failedJobs | Select-Object Id, Name, State | Export-Csv -Path (Join-Path $folderName 'listOfFailedJobs.csv') -NoTypeInformation -Force
+                'Name,Id,State,Reason' | Out-File -FilePath (Join-Path $folderName 'failedJobError.csv') -Force
                 $failedJobs | ForEach-Object {
-                    ($_ | Select-Object Id, Name, State, HasMoreData | Format-Table -AutoSize -HideTableHeaders)
+                    ($_ | Select-Object Id, Name, State | Format-Table -AutoSize -HideTableHeaders)
                     $errorDetails = $_.ChildJobs.JobStateInfo.Reason -join ';'
                     Write-Host $errorDetails
-                    $_.Name + ',' + $errorDetails | Out-File -FilePath "./$folderName/failedJobError.csv" -Append -Force 
+                    "$($_.Name),$($_.Id),$($_.State),$($errorDetails -replace '^System.Management.Automation.RemoteException:', '' )" | Out-File -FilePath (Join-Path $folderName 'failedJobError.csv') -Append -Force 
                 }
                 Write-Host ($failedJobs | Measure-Object).Count jobs failed out of $Global:totalJobs jobs
             }
@@ -426,7 +426,7 @@ Write-Output "Report Generated at: $($reportPath)"
 # Combine all status logs into a central summary
 $summaryFile = Join-Path $folderName 'jobSummary.csv'
 # 'Name,Id,State,Reason' | Out-File -FilePath $summaryFile -Encoding utf8 -Force
-$logFiles = @($timeoutLog, $skipLog, $stopLog)
+$logFiles = @($timeoutLog, $skipLog, $stopLog,(Join-Path $folderName 'failedJobError.csv'))
 foreach ($lf in $logFiles) {
     if (Test-Path $lf) { Import-Csv $lf | Export-Csv -Path $summaryFile -NoTypeInformation -Append -Force }
 }
