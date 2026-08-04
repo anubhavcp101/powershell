@@ -15,7 +15,8 @@ function Invoke-Jobs {
         [int]$MaxJob = 11,
         [string]$ReportPath = '',
         [int]$jobTimeOutSec = 1800,
-        [string]$runName = ""
+        [string]$runName = "",
+        [string]$workPath
     )
 
     $task = {
@@ -103,7 +104,7 @@ function Invoke-Jobs {
     $maxJobCount = @($MaxJob, 30) | Where-Object { ($_ -ne '') -and ($_ -ne $null) -and ($_.GetType().ToString() -eq 'System.Int32') } | Select-Object -First 1
     $jobTimeoutSec = $jobTimeOutSec
 
-    $reportPaths = @($PSScriptRoot, (Get-Location).Path, $HOME, $env:TEMP, 'C:\Temp')
+    $reportPaths = @($workPath, $PSScriptRoot, (Get-Location).Path, $HOME, $env:TEMP, 'C:\Temp')
     $wrkdir = $reportPaths | Where-Object { ($_ -ne '') -and ($_ -ne $null) -and (Test-Path -Path $_ -PathType Container) } | Select-Object -First 1
     Set-Location $wrkdir
 
@@ -341,12 +342,14 @@ Start-Sleep -Seconds 5
 }
 
 
-Set-Location $PSScriptRoot
+$workDirs = @($PSScriptRoot, (Get-Location).Path, $HOME, $env:TEMP, 'C:\Temp')
+$workdir = $workDirs | Where-Object { ($_ -ne '') -and ($null -ne $_) -and (Test-Path -Path $_ -PathType Container) } | Select-Object -First 1
+Set-Location $workdir
 
 $runName = "Run-$(Get-Date -Format 'dd-MM-yyyyThh-mm')"
 
 $vmList = Import-Csv $filePath
-Invoke-Jobs -VmList ($vmList) -MaxJob $jobs -runName $runName
+Invoke-Jobs -VmList ($vmList) -MaxJob $jobs -runName $runName -workPath $workdir
 
 $failedJobInputs = Import-Csv (Join-Path $runName 'failedJobError.csv')
 $retryInputs = $vmList | Where-Object { $_.Name -in $failedJobInputs.Name}
@@ -355,7 +358,7 @@ Write-Output 'Do you want to retry with following inputs:'
 $retryInputs | Format-Table
 $resp = Read-Host
 if ($resp -in @('y',"Y")) {
-    Invoke-Jobs -VmList $retryInputs -MaxJob $jobs -runName "Retry-$($runName)"
+    Invoke-Jobs -VmList $retryInputs -MaxJob $jobs -runName "Retry-$($runName)" -workPath $workdir
     
 }
 

@@ -15,7 +15,8 @@ function Invoke-Jobs {
         [int]$MaxJob = 11,
         [string]$ReportPath = '',
         [int]$jobTimeOutSec = 1800,
-        [string]$runName = ''
+        [string]$runName = '',
+        [string]$workPath
     )
 
     $task = $execute
@@ -46,8 +47,8 @@ function Invoke-Jobs {
     $maxJobCount = @($MaxJob, 30) | Where-Object { ($_ -ne '') -and ($_ -ne $null) -and ($_.GetType().ToString() -eq 'System.Int32') } | Select-Object -First 1
     $jobTimeoutSec = @($jobTimeOutSec, 1800) | Where-Object { ($_ -ne '') -and ($_ -ne $null) -and ($_.GetType().ToString() -eq 'System.Int32') } | Select-Object -First 1
 
-    $reportPaths = @($PSScriptRoot, (Get-Location).Path, $HOME, $env:TEMP, 'C:\Temp')
-    $wrkdir = $reportPaths | Where-Object { ($_ -ne '') -and ($null -ne $_) -and (Test-Path -Path $_ -PathType Container) } | Select-Object -First 1
+    $workPaths = @($workPath, $PSScriptRoot, (Get-Location).Path, $HOME, $env:TEMP, 'C:\Temp')
+    $wrkdir = $workPaths | Where-Object { ($_ -ne '') -and ($null -ne $_) -and (Test-Path -Path $_ -PathType Container) } | Select-Object -First 1
     Set-Location $wrkdir
 
     $processing = $false
@@ -282,13 +283,15 @@ Start-Sleep -Seconds 5
     
 }
 
+$workDirs = @($PSScriptRoot, (Get-Location).Path, $HOME, $env:TEMP, 'C:\Temp')
+$workdir = $workDirs | Where-Object { ($_ -ne '') -and ($null -ne $_) -and (Test-Path -Path $_ -PathType Container) } | Select-Object -First 1
+Set-Location $workdir
 
-Set-Location $PSScriptRoot
 
 $runName = "Run-$(Get-Date -Format 'dd-MM-yyyyThh-mm')"
 
 $vmList = Import-Csv $filePath
-Invoke-Jobs -VmList ($vmList) -MaxJob $jobs -execute $execute -runName $runName
+Invoke-Jobs -VmList ($vmList) -MaxJob $jobs -execute $execute -runName $runName -workPath $workdir
 
 $failedJobInputs = Import-Csv (Join-Path $runName 'failedJobError.csv')
 $retryInputs = $vmList | Where-Object { $_.Name -in $failedJobInputs.Name }
@@ -297,7 +300,7 @@ Write-Output 'Do you want to retry with following inputs:'
 $retryInputs | Format-Table
 $resp = Read-Host
 if ($resp -in @('y', 'Y')) {
-    Invoke-Jobs -VmList $retryInputs -MaxJob $jobs -runName "Retry-$($runName)"
+    Invoke-Jobs -VmList $retryInputs -MaxJob $jobs -runName "Retry-$($runName)" -workPath $workdir
     
 }
 
