@@ -293,14 +293,36 @@ $runName = "Run-$(Get-Date -Format 'dd-MM-yyyyThh-mm')"
 $vmList = Import-Csv $filePath
 Invoke-Jobs -VmList ($vmList) -MaxJob $jobs -execute $execute -runName $runName -workPath $workdir
 
-$failedJobInputs = Import-Csv (Join-Path $runName 'failedJobError.csv')
-$retryInputs = $vmList | Where-Object { $_.Name -in $failedJobInputs.Name }
+if (
+    (Test-Path (Join-Path $runName 'failedJobError.csv')) -or
+    (Test-Path (Join-Path $runName 'notStartedJobs.csv'))
+) {
+    $retryTable = @{}
+    $vmList | ForEach-Object {
+        if ($retryTable.ContainsKey($_.Name)) {
+            $retryTable[$_.Name] += $_
+        }
+        else {
+            $retryTable[$_.Name] = @($_)
+        }
+    }
 
-Write-Output 'Do you want to retry with following inputs:'
-$retryInputs | Format-Table
-$resp = Read-Host
-if ($resp -in @('y', 'Y')) {
-    Invoke-Jobs -VmList $retryInputs -MaxJob $jobs -runName "Retry-$($runName)" -workPath $workdir
+    $retryInputs = foreach ( $file in @(
+            (Join-Path $runName 'failedJobError.csv'),
+            (Join-Path $runName 'notStartedJobs.csv')
+        )) {
+        Import-Csv $file | Where-Object { $retryTable.ContainsKey($_.Name) } | ForEach-Object { $retryTable[$_.Name] }
+    }
+
+    if ($retryInputs) {
+        Write-Output 'Do you want to retry with following inputs:'
+        $retryInputs | Format-Table
+        $resp = Read-Host
+        if ($resp -in @('y', 'Y')) {
+            Invoke-Jobs -VmList $retryInputs -MaxJob $jobs -runName "Retry-$($runName)" -workPath $workdir
     
+        }
+    }
 }
+
 

@@ -11,11 +11,11 @@ function Invoke-Jobs {
     param (
         [Parameter(Mandatory = $true, ValueFromPipeline = $true)]
         [Object[]]$VmList,
-        [scriptblock]$execute={},
+        [scriptblock]$execute = {},
         [int]$MaxJob = 11,
         [string]$ReportPath = '',
         [int]$jobTimeOutSec = 1800,
-        [string]$runName = "",
+        [string]$runName = '',
         [string]$workPath
     )
 
@@ -122,9 +122,10 @@ function Invoke-Jobs {
         }
     }
 
-    if (($null -eq $runName) -or ($runName -eq "") ) {
+    if (($null -eq $runName) -or ($runName -eq '') ) {
         $folderName = "Run-$(Get-Date -Format 'dd-MM-yyyyThh-mm')"
-    } else {
+    }
+    else {
         $folderName = $runName
     }
 
@@ -223,14 +224,14 @@ Start-Sleep -Seconds 5
                     if ($job -and $job.State -eq 'Running') {
                         Stop-Job -Id $jobId
                         Write-Host "Job $jobId stopped via flag file $($file.Name)."
-                        [PSCustomObject]@{Name = $job.Name; Id = $job.Id; State = $job.State; Reason = "Stopped using per-job flag"} | Export-Csv -Path $stopLog -NoTypeInformation -Append -Force
+                        [PSCustomObject]@{Name = $job.Name; Id = $job.Id; State = $job.State; Reason = 'Stopped using per-job flag' } | Export-Csv -Path $stopLog -NoTypeInformation -Append -Force
                     }
                     Remove-Item $file.FullName -Force -ErrorAction SilentlyContinue
                 }
             }
             if (($currentJobs | Measure-Object).Count -gt 0) {
-                Write-Host "Currently Waiting for all jobs to be finished"
-                Write-Host "Currently Running Jobs are:"
+                Write-Host 'Currently Waiting for all jobs to be finished'
+                Write-Host 'Currently Running Jobs are:'
                 $currentJobs | Select-Object Id, Name, State, @{n = 'Timer(Sec)'; e = { [Math]::Floor(((Get-Date) - $_.PSBeginTime).TotalSeconds) } } | Format-Table -AutoSize -RepeatHeader
                 $currentJobs | ForEach-Object {
                     $elapsed = (Get-Date) - $_.PSBeginTime
@@ -258,7 +259,7 @@ Start-Sleep -Seconds 5
                 $proc = Show-FailingJobsWindow -JobList $Global:jobs -TargetFolder $folderName -FailFlagRef ([ref]$failFlag) -ShowFailedJob $showFailedJob -CurrentProc $proc
                 if ($null -ne $proc) { Stop-Process -Id $proc.Id }
                 if (($failedJobs | Measure-Object).Count -gt 0) {
-                    Write-Host "Following Jobs Failed. Please Check"
+                    Write-Host 'Following Jobs Failed. Please Check'
                     Write-Host "$(($failedJobs | Measure-Object).Count) jobs failed out of $Global:totalJobs jobs"
                     $failedJobs | Select-Object Id, Name, State, HasMoreData | Format-Table -AutoSize -RepeatHeader
                     $failedJobs | Select-Object Id, Name, State | Export-Csv -Path (Join-Path $folderName 'listOfFailedJobs.csv') -NoTypeInformation -Force
@@ -285,7 +286,7 @@ Start-Sleep -Seconds 5
                     if ($job -and $job.State -eq 'Running') {
                         Stop-Job -Id $jobId
                         Write-Host "Job $jobId stopped via flag file $($file.Name)."
-                        [PSCustomObject]@{Name = $job.Name; Id = $job.Id; State = $job.State; Reason = "Stopped using per-job flag"} | Export-Csv -Path $stopLog -NoTypeInformation -Append -Force
+                        [PSCustomObject]@{Name = $job.Name; Id = $job.Id; State = $job.State; Reason = 'Stopped using per-job flag' } | Export-Csv -Path $stopLog -NoTypeInformation -Append -Force
                     }
                     Remove-Item $file.FullName -Force -ErrorAction SilentlyContinue
                 }
@@ -321,9 +322,9 @@ Start-Sleep -Seconds 5
     $summaryFile = Join-Path $folderName 'jobSummary.csv'
     $notStartedLog = Join-Path $folderName 'notStartedJobs.csv'
     if (Test-Path $skipLog) {
-        $notStartedJobs = Compare-Object -ReferenceObject $vms.Name -DifferenceObject $jobs.Name | Where-Object {$_.SideIndicator -eq '<='}
+        $notStartedJobs = Compare-Object -ReferenceObject $vms.Name -DifferenceObject $jobs.Name | Where-Object { $_.SideIndicator -eq '<=' }
         foreach ($job in $notStartedJobs) {
-            [PSCustomObject]@{Name=$job.InputObject; Id = 'NA'; State = 'Not Started'; Reason='Not Started as stopped by Break_Loop'} | Export-Csv -Path $notStartedLog -NoTypeInformation -Append -Force
+            [PSCustomObject]@{Name = $job.InputObject; Id = 'NA'; State = 'Not Started'; Reason = 'Not Started as stopped by Break_Loop' } | Export-Csv -Path $notStartedLog -NoTypeInformation -Append -Force
         }
     }
     $logFiles = @($timeoutLog, $skipLog, $stopLog, (Join-Path $folderName 'failedJobError.csv'), $notStartedLog)
@@ -336,7 +337,7 @@ Start-Sleep -Seconds 5
             $state = if ($r.CommandStatus -eq 'Success') { 'Completed' } else { 'Failed' }
             $reason = if ($state -eq 'Failed') { $r.CommandOutput } else { '' }
             [PSCustomObject]@{ Name = $r.VMName; Id = ''; State = $state; Reason = $reason } |
-                Export-Csv -Path $summaryFile -NoTypeInformation -Append -Force
+            Export-Csv -Path $summaryFile -NoTypeInformation -Append -Force
         }
     }
 }
@@ -351,14 +352,36 @@ $runName = "Run-$(Get-Date -Format 'dd-MM-yyyyThh-mm')"
 $vmList = Import-Csv $filePath
 Invoke-Jobs -VmList ($vmList) -MaxJob $jobs -runName $runName -workPath $workdir
 
-$failedJobInputs = Import-Csv (Join-Path $runName 'failedJobError.csv')
-$retryInputs = $vmList | Where-Object { $_.Name -in $failedJobInputs.Name}
+if (
+    (Test-Path (Join-Path $runName 'failedJobError.csv')) -or
+    (Test-Path (Join-Path $runName 'notStartedJobs.csv'))
+) {
+    $retryTable = @{}
+    $vmList | ForEach-Object {
+        if ($retryTable.ContainsKey($_.Name)) {
+            $retryTable[$_.Name] += $_
+        }
+        else {
+            $retryTable[$_.Name] = @($_)
+        }
+    }
 
-Write-Output 'Do you want to retry with following inputs:'
-$retryInputs | Format-Table
-$resp = Read-Host
-if ($resp -in @('y',"Y")) {
-    Invoke-Jobs -VmList $retryInputs -MaxJob $jobs -runName "Retry-$($runName)" -workPath $workdir
+    $retryInputs = foreach ( $file in @(
+            (Join-Path $runName 'failedJobError.csv'),
+            (Join-Path $runName 'notStartedJobs.csv')
+        )) {
+        Import-Csv $file | Where-Object { $retryTable.ContainsKey($_.Name) } | ForEach-Object { $retryTable[$_.Name] }
+    }
+
+    if ($retryInputs) {
+        Write-Output 'Do you want to retry with following inputs:'
+        $retryInputs | Format-Table
+        $resp = Read-Host
+        if ($resp -in @('y', 'Y')) {
+            Invoke-Jobs -VmList $retryInputs -MaxJob $jobs -runName "Retry-$($runName)" -workPath $workdir
     
+        }
+    }
 }
+
 
