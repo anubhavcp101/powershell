@@ -141,6 +141,8 @@ function Invoke-PatchReport {
         $expVM | Export-Csv -NoTypeInformation -Path (Join-Path $reportTempDir "$($Name.trim()).csv") -Force -Append
     }
 
+    $requiredColumns = @( 'subscription', 'resourceGroup', 'Name' ) 
+
     $retry = 3
     $optionsToAdd = @{}
     $optionsToAdd.Add('retry', $retry)
@@ -166,6 +168,10 @@ function Invoke-PatchReport {
 
 
     $columns = $VmList[0].PSObject.Members | Where-Object { $_.MemberType -eq 'NoteProperty' } | Select-Object -ExpandProperty Name
+
+    $missing = Compare-Object -ReferenceObject $requiredColumns -DifferenceObject $columns | Where-Object { ($_.SideIndicator -eq '<=') } 
+    if ( $missing ) { $missing | ForEach-Object { Write-Warning "Missing column: $($_.InputObject)" }; return 1 }  
+
     if ( $columns -contains 'Name' ) {
         # Check for duplicate VM names and append  a unique identifier to duplicate names to ensure each job has a unique name
         if (($VmList.Count) -ne ( $VmList.Name | Select-Object -Unique).Count) {
