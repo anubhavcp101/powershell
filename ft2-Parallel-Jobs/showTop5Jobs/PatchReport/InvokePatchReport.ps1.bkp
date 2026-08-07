@@ -61,28 +61,12 @@ function Invoke-PatchReport {
         [Parameter(Mandatory = $true, ValueFromPipeline = $true)]
         [Object[]]$VmList,
         [int]$MaxJob = 11,
-        [ValidateScript({ if ([string]::IsNullOrWhiteSpace($_)) { $true } else { Test-Path -Path $_ -PathType Container } })]
+        [ValidateScript({ Test-Path -Path $_ -PathType Container }, ErrorMessage = 'ReportPath must be a valid directory')]
         [string]$ReportPath = '',
         [ValidateRange(1800, 7200)]
         [int]$jobTimeOutSec = 1800,
         [string]$runName = ""
     )
-    # -------------------------------------------------------------------------
-    # Helper: single overall progress reporting using Write-Progress
-    # -------------------------------------------------------------------------
-    function Update-Progress {
-        param(
-            [string]$Status,               # short description of current step
-            [int]   $Percent = $null       # 0‑100 - if omitted PowerShell keeps the last value
-        )
-        $activity = 'Running Patch Report'
-        if ($null -ne $Percent) {
-            Write-Progress -Activity $activity -Status $Status -PercentComplete $Percent
-        }
-        else {
-            Write-Progress -Activity $activity -Status $Status
-        }
-    }
 
     $task = {
         $commandStatus = ''
@@ -178,12 +162,6 @@ function Invoke-PatchReport {
     $Global:totalJobs = 0
     $Global:jobErrors = ''
     $Global:errorFile = @()
-    # -------------------------------------------------------------------------
-    # Initialise overall progress - we know total VM count up‑front
-    # -------------------------------------------------------------------------
-    $totalVMs = $VmList.Count
-    $started = 0
-    Update-Progress -Status "Initialising ($totalVMs VMs)" -Percent 0
 
     # Check for duplicate VM names and append a unique identifier to duplicate names to ensure each job has a unique name
     if (($VmList.Count) -ne ( $VmList.Name | Select-Object -Unique).Count) {
@@ -340,9 +318,6 @@ Start-Sleep -Seconds 5
     $Global:totalJobs = ($vms | Measure-Object).Count
     $vms | ForEach-Object {
         if ($jobCounter -lt $maxJobCount) {
-            $started++
-            $percent = [Math]::Round(($started / $totalVMs) * 100)
-            Update-Progress -Status "Launching jobs ($started / $totalVMs)" -Percent $percent
             Write-Output "Starting Job of $_.Name"
             $job = Start-Job -Name $_.Name -ScriptBlock $task -ArgumentList $_, $wrkdir
             $Global:jobs += $job
@@ -364,9 +339,6 @@ Start-Sleep -Seconds 5
 
         $currentlyRunningJobs = $Global:jobs | Where-Object { ($_.State -eq 'Running') -and ($_.HasMoreData -eq $true) }
         if ((($currentlyRunningJobs | Measure-Object).Count -lt $maxJobCount) -and (($jobCounter) -lt $Global:totalJobs)) {
-            $started++
-            $percent = [Math]::Round(($started / $totalVMs) * 100)
-            Update-Progress -Status "Launching jobs ($started / $totalVMs)" -Percent $percent
             Write-Output "Starting Job of $vms[$Global:jobCounter].Name"
             $job = Start-Job -Name $vms[$Global:jobCounter].Name -ScriptBlock $task -ArgumentList $vms[$Global:jobCounter], $wrkdir
             $Global:jobs += $job
@@ -374,11 +346,10 @@ Start-Sleep -Seconds 5
         }
         elseif (($jobCounter) -eq $Global:totalJobs) {
             Write-Output 'All Jobs Initiated'
-            $currentJobs = $Global:jobs | Where-Object { ($_.State -eq 'Running') -and ($_.HasMoreData -eq $true) }
+            $currentJobs = $Global:jobs | Where-Object { ($_.State -eq 'Running') -and ($_.HasMoreData -eq $true) } #| where State -EQ 'Running' | where HasMoreData -EQ $true
             Invoke-StopFlagProcessing -WorkingDirectory $wrkdir -StopLogPath $stopLog
             if (($currentJobs | Measure-Object).Count -gt 0) {
                 Write-Output "Currently Waiting for all jobs to be finished"
-                Update-Progress -Status "Waiting - all jobs started, monitoring"
                 Write-Output "Currently Running Jobs are:"
                 $currentJobs | Select-Object Id, Name, State, @{n = 'Timer(Sec)'; e = { [Math]::Floor(((Get-Date) - $_.PSBeginTime).TotalSeconds) } } | Format-Table -AutoSize -RepeatHeader
                 Invoke-JobTimeoutCheck -RunningJobs $currentJobs -TimeoutSeconds $jobTimeoutSec -TimeoutLogPath $timeoutLog
@@ -387,8 +358,6 @@ Start-Sleep -Seconds 5
                 Start-Sleep -Seconds 30
             }
             else {
-                # All work done - final 100 % progress
-                Update-Progress -Status "All jobs finished - aggregating results" -Percent 100
                 Save-JobLog -JobList $Global:jobs -TargetFolder $folderName
                 Start-Transcript -Path "./$folderName/allJobs.txt" -Force
                 $Global:jobs | ForEach-Object {
@@ -397,7 +366,7 @@ Start-Sleep -Seconds 5
                     Write-Output $jobDetails
                 }
                 Stop-Transcript
-                $failedJobs = $Global:jobs | Where-Object { ($_.State -eq 'Failed') -and ($_.HasMoreData -eq $true) }
+                $failedJobs = $Global:jobs | Where-Object { ($_.State -eq 'Failed') -and ($_.HasMoreData -eq $true) } #| where State -EQ 'Failed' | where HasMoreData -EQ $true
                 $proc = Show-FailingJobsWindow -JobList $Global:jobs -TargetFolder $folderName -FailFlagRef ([ref]$failFlag) -ShowFailedJob $showFailedJob -CurrentProc $proc
                 if ($null -ne $proc) { Stop-Process -Id $proc.Id }
                 if (($failedJobs | Measure-Object).Count -gt 0) {
@@ -419,7 +388,7 @@ Start-Sleep -Seconds 5
             }
         }
         else {
-            $currentJobs = $Global:jobs | Where-Object { (($_.State -eq 'Running') -and ($_.HasMoreData -eq $true)) }
+            $currentJobs = $Global:jobs | Where-Object { (($_.State -eq 'Running') -and ($_.HasMoreData -eq $true)) } #| where State -EQ 'Running' | where HasMoreData -EQ $true
             Invoke-StopFlagProcessing -WorkingDirectory $wrkdir -StopLogPath $stopLog
             Invoke-JobTimeoutCheck -RunningJobs $currentJobs -TimeoutSeconds $jobTimeoutSec -TimeoutLogPath $timeoutLog
             Save-JobLog -JobList $currentJobs -TargetFolder $folderName
@@ -434,15 +403,7 @@ Start-Sleep -Seconds 5
 
     Write-Output 'Processing'
     Set-Location (Join-Path $wrkdir $reportTempDir)
-    $csvFiles = Get-ChildItem -Path . -Filter *.csv
-    $fileIdx = 0
-    $VmOutputs = @()
-    foreach ($csv in $csvFiles) {
-        $fileIdx++
-        $percent = [Math]::Round(($fileIdx / $csvFiles.Count) * 100)
-        Update-Progress -Status "Aggregating $($csv.Name) ($fileIdx / $($csvFiles.Count))" -Percent $percent
-        $VmOutputs += Import-Csv -Path $csv.FullName
-    }
+    $VmOutputs = Import-Csv -Path (Get-ChildItem -Path . -Filter *.csv)
 
     $report = foreach ($output in $VmOutputs) {
         if ($output.CommandStatus -eq 'Success') {
@@ -509,6 +470,7 @@ if ((Test-Path (Join-Path $runName 'failedJobError.csv')) -or (Test-Path (Join-P
     $retryTable = @{}
     # Build a hash table of VM name => array of VM objects (preserves duplicates)
     $vmList | ForEach-Object {
+        # $retryTable[$_.Name] = $_
         if ($retryTable.ContainsKey($_.Name)) {
             $retryTable[$_.Name] += $_
         }
@@ -549,3 +511,41 @@ Write-Output "Following Jobs failed because either of timeout, stopped or skippe
     Import-Csv $_ | Format-Table -AutoSize -Property Name, Id, State, Reason
 }
 
+# -------------------------------------------------------------
+# PERFORMANCE & MAINTENANCE CHECKLIST
+# -------------------------------------------------------------
+# DONE
+#   ✔ Refactored to accept VM objects (pipeline) instead of CSV path only.
+#   ✔ Extract duplicate wait-loop branches into helper functions.
+#   ✔ Fixed PSScriptAnalyzer warnings (unapproved verbs, where alias).
+#   ✔ Enhanced comment block with .NOTES and .LINK sections.
+#   ✔ Combined multiple where clauses into single scriptblocks for performance.
+#
+# TODO – correctness
+#   ☐ Validate required VM properties before Start-Job.
+#   ☐ Add error handling for missing VM properties (Name, ResourceGroup, Subscription).
+#
+# TODO – reliability
+#   ☐ Remove-Job after final Receive-Job to avoid job table buildup.
+#   ☐ Document/enforce unique VM names for -Name on Start-Job.
+#   ☐ Implement exponential backoff for retry logic (currently linear: 30s, 60s, 90s).
+#
+# TODO – maintainability
+#   ☐ Replace $Global: with $script: inside Invoke-PatchReport.
+#   ☐ Move bottom driver block (Import-Csv, retry prompt) to a separate runner script.
+#   ☐ Remove comment remnants from refactored code (lines 333, 353, 375).
+#   ☐ Standardize spacing in Where-Object scriptblocks for consistency.
+#   ☐ Add unit tests for helper functions (Invoke-StopFlagProcessing, Invoke-JobTimeoutCheck).
+#
+# TODO – code quality
+#   ☐ Replace Write-Host with Write-Output or logging framework for better pipeline support. this is done
+#   ☐ Add parameter validation using ValidateNotNullOrEmpty, ValidateRange, etc. this is done
+#   ☐ Implement ShouldProcess for -WhatIf and -Confirm support.
+#   ☐ Add progress indicators using Write-Progress for long-running operations.
+#
+# OPTIONAL (low priority)
+#   ☐ $using: instead of -ArgumentList — only if initTask merge is removed; not required.
+#   ☐ ForEach-Object -Parallel (PS 7+) — only if moving off Start-Job.
+#   ☐ Add support for Linux VMs with appropriate patch collection logic.
+#   ☐ Implement job result aggregation and summary statistics.
+# -------------------------------------------------------------
