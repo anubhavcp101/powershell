@@ -67,22 +67,7 @@ function Invoke-PatchReport {
         [int]$jobTimeOutSec = 1800,
         [string]$runName = ""
     )
-    # -------------------------------------------------------------------------
-    # Helper: single overall progress reporting using Write-Progress
-    # -------------------------------------------------------------------------
-    function Update-Progress {
-        param(
-            [string]$Status,               # short description of current step
-            [int]   $Percent = $null       # 0‑100 - if omitted PowerShell keeps the last value
-        )
-        $activity = 'Running Patch Report'
-        if ($null -ne $Percent) {
-            Write-Progress -Activity $activity -Status $Status -PercentComplete $Percent
-        }
-        else {
-            Write-Progress -Activity $activity -Status $Status
-        }
-    }
+
 
     $task = {
         $commandStatus = ''
@@ -178,22 +163,45 @@ function Invoke-PatchReport {
     $Global:totalJobs = 0
     $Global:jobErrors = ''
     $Global:errorFile = @()
-    # -------------------------------------------------------------------------
-    # Initialise overall progress - we know total VM count up‑front
-    # -------------------------------------------------------------------------
-    $totalVMs = $VmList.Count
-    $started = 0
-    Update-Progress -Status "Initialising ($totalVMs VMs)" -Percent 0
 
-    # Check for duplicate VM names and append a unique identifier to duplicate names to ensure each job has a unique name
-    if (($VmList.Count) -ne ( $VmList.Name | Select-Object -Unique).Count) {
-        Write-Warning "Duplicate VM names found in the input list. Please provide unique VM names."
-        $VmList | Group-Object -Property Name | Where-Object { $_.Count -gt 1 } | ForEach-Object { 
-            Write-Warning "Duplicate VM found: $($_.Name) - Count: $($_.Count)"
+
+    $columns = $VmList[0].PSObject.Members | Where-Object { $_.MemberType -eq 'NoteProperty' } | Select-Object -ExpandProperty Name
+    if ( $columns -contains 'Name' ) {
+        # Check for duplicate VM names and append  a unique identifier to duplicate names to ensure each job has a unique name
+        if (($VmList.Count) -ne ( $VmList.Name | Select-Object -Unique).Count) {
+            Write-Warning "Duplicate VM names found in the input list."
+            $nameCounts = @{} 
+            foreach ($instance in $VmList) {
+                $currentName = $instance.Name
+                if ($nameCounts.ContainsKey($currentName)) {
+                    $nameCounts[$currentName]++
+                    $instance.Name = "$($currentName)#$($nameCounts[$currentName])"
+                }
+                else {
+                    $nameCounts[$currentName] = 0
+                }
+            } 
+            foreach ( $key in (($nameCounts).Keys) ) {
+                if ( $nameCounts[$key] -gt 0) {
+                    Write-Warning "Duplicate VM found: $($key) - Count: $($nameCounts[$key])"
+                }
+            }
         }
-        foreach ( $group in ($VmList | Group-Object -Property Name | Where-Object { $_.Count -gt 1 })) {
-            for ($i = 0; $i -lt $group.Count; $i++) {
-                $group.Group[$i].Name = "$($group.Name)#$($i)"
+    }
+    else {
+        # what if Name column is missing, look for another column and replicate it to generate Name column
+        $alternativeColumnFound = $false
+        foreach ($column in $columns) {
+            if (($VmList.Count) -eq (($VmList | Select-Object -ExpandProperty $column | Select-Object -Unique).Count)) {
+                $VmList | ForEach-Object { $_ | Add-Member -NotePropertyName 'Name' -NotePropertyValue ($_ | Select-Object -ExpandProperty $column) }
+                $alternativeColumnFound = $true
+                break
+            }
+        }
+        # Generate alternate column 
+        if ( -not $alternativeColumnFound) {
+            for ($i = 0; $i -lt $VmList.Count; $i++) {
+                $VmList[$i] | Add-Member -NotePropertyName 'Name' -NotePropertyValue "$(($VmList[$i] | Select-Object -ExpandProperty $columns[0]))#$($i)"
             }
         }
     }
@@ -333,9 +341,27 @@ Start-Sleep -Seconds 5
         }
     }
 
+    function Update-Progress {
+        param(
+            [string]$Status,               # short description of current step
+            [int]   $Percent = $null       # 0‑100 - if omitted PowerShell keeps the last value
+        )
+        $activity = 'Running Patch Report'
+        if ($null -ne $Percent) {
+            Write-Progress -Activity $activity -Status $Status -PercentComplete $Percent
+        }
+        else {
+            Write-Progress -Activity $activity -Status $Status
+        }
+    }
+
     $showFailedJob = $true
     $failFlag = 2
-    $proc = $null
+    $proc = $null 
+
+    $totalVMs = $VmList.Count
+    $started = 0
+    Update-Progress -Status "Initialising ($totalVMs VMs)" -Percent 0
 
     $Global:totalJobs = ($vms | Measure-Object).Count
     $vms | ForEach-Object {
