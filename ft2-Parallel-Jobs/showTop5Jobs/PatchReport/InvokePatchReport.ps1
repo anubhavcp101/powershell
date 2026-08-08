@@ -160,13 +160,11 @@ function Invoke-PatchReport {
 
     $task = [scriptblock]::Create($initTask.ToString() + "`n" + $task.ToString())
 
-    $Global:jobs = @()
+    $Global:jobs = [System.Collections.Generic.List[object]]::new()
     $Global:jobCounter = 0
     $Global:totalJobs = 0
-    $Global:jobErrors = ''
-    $Global:errorFile = @()
 
-
+    $progressBar = $true
     $columns = $VmList[0].PSObject.Members | Where-Object { $_.MemberType -eq 'NoteProperty' } | Select-Object -ExpandProperty Name
 
     $missing = Compare-Object -ReferenceObject $requiredColumns -DifferenceObject $columns | Where-Object { ($_.SideIndicator -eq '<=') } 
@@ -273,15 +271,15 @@ function Invoke-PatchReport {
         )
         $failedJobs = $JobList | Where-Object { ($_.State -eq 'Failed') -and ($_.HasMoreData -eq $true) }
         if (($failedJobs | Measure-Object).Count -gt 0) {
-            $failedJobs | ft Name, State, Id, @{n = 'Reason'; e = { ($_.ChildJobs.JobStateInfo.Reason -join ';') -replace '^System.Management.Automation.RemoteException:', '' } } -Wrap | Out-File -FilePath "./$TargetFolder/failingJobs.txt"
+            $failedJobs | Format-Table Name, State, Id, @{n = 'Reason'; e = { ($_.ChildJobs.JobStateInfo.Reason -join ';') -replace '^System.Management.Automation.RemoteException:', '' } } -Wrap | Out-File -FilePath (Join-Path $TargetFolder 'failingJobs.txt') #"./$TargetFolder/failingJobs.txt"
             $FailFlagRef.Value++
         }
         if ($FailFlagRef.Value -eq 3) {
-            $fPath = "./$TargetFolder/failingJobs.txt"
+            $fPath = Join-Path $TargetFolder 'failingJobs.txt' #"./$TargetFolder/failingJobs.txt"
             $command = @"
 while(`$true) {
 Clear-Host
-Get-Content `$"$fPath`"
+Get-Content `"$fPath`"
 Start-Sleep -Seconds 5
 }
 "@
@@ -352,13 +350,16 @@ Start-Sleep -Seconds 5
             [string]$Status,               # short description of current step
             [int]   $Percent = $null       # 0‑100 - if omitted PowerShell keeps the last value
         )
-        $activity = 'Running Patch Report'
-        if ($null -ne $Percent) {
-            Write-Progress -Activity $activity -Status $Status -PercentComplete $Percent
-        }
-        else {
-            Write-Progress -Activity $activity -Status $Status
-        }
+        if ($progressBar) {
+            $activity = 'Running Patch Report'
+            if ($null -ne $Percent) {
+                Write-Progress -Activity $activity -Status $Status -PercentComplete $Percent
+            }
+            else {
+                Write-Progress -Activity $activity -Status $Status
+            }
+        } 
+
     }
 
     $showFailedJob = $true
@@ -371,13 +372,13 @@ Start-Sleep -Seconds 5
 
     $Global:totalJobs = ($vms | Measure-Object).Count
     $vms | ForEach-Object {
-        if ($jobCounter -lt $maxJobCount) {
+        if ($Global:jobCounter -lt $maxJobCount) {
             $started++
             $percent = [Math]::Round(($started / $totalVMs) * 100)
             Update-Progress -Status "Launching jobs ($started / $totalVMs)" -Percent $percent
-            Write-Output "Starting Job of $_.Name"
+            Write-Output "Starting Job of $($_.Name)"
             $job = Start-Job -Name $_.Name -ScriptBlock $task -ArgumentList $_, $wrkdir
-            $Global:jobs += $job
+            $Global:jobs.Add($job)
             $Global:jobCounter++
         }
     }
@@ -395,16 +396,16 @@ Start-Sleep -Seconds 5
         }
 
         $currentlyRunningJobs = $Global:jobs | Where-Object { ($_.State -eq 'Running') -and ($_.HasMoreData -eq $true) }
-        if ((($currentlyRunningJobs | Measure-Object).Count -lt $maxJobCount) -and (($jobCounter) -lt $Global:totalJobs)) {
+        if ((($currentlyRunningJobs | Measure-Object).Count -lt $maxJobCount) -and (($Global:jobCounter) -lt $Global:totalJobs)) {
             $started++
             $percent = [Math]::Round(($started / $totalVMs) * 100)
             Update-Progress -Status "Launching jobs ($started / $totalVMs)" -Percent $percent
-            Write-Output "Starting Job of $vms[$Global:jobCounter].Name"
+            Write-Output "Starting Job of $($vms[$Global:jobCounter].Name)"
             $job = Start-Job -Name $vms[$Global:jobCounter].Name -ScriptBlock $task -ArgumentList $vms[$Global:jobCounter], $wrkdir
-            $Global:jobs += $job
+            $Global:jobs.Add($job)
             $Global:jobCounter++
         }
-        elseif (($jobCounter) -eq $Global:totalJobs) {
+        elseif (($Global:jobCounter) -eq $Global:totalJobs) {
             Write-Output 'All Jobs Initiated'
             $currentJobs = $Global:jobs | Where-Object { ($_.State -eq 'Running') -and ($_.HasMoreData -eq $true) }
             Invoke-StopFlagProcessing -WorkingDirectory $wrkdir -StopLogPath $stopLog
@@ -422,7 +423,7 @@ Start-Sleep -Seconds 5
                 # All work done - final 100 % progress
                 Update-Progress -Status "All jobs finished - aggregating results" -Percent 100
                 Save-JobLog -JobList $Global:jobs -TargetFolder $folderName
-                Start-Transcript -Path "./$folderName/allJobs.txt" -Force
+                Start-Transcript -Path (Join-Path $folderName 'allJobs.txt') -Force #"./$folderName/allJobs.txt" -Force
                 $Global:jobs | ForEach-Object {
                     ($_ | Select-Object Id, Name, State, HasMoreData | Format-Table -AutoSize -HideTableHeaders)
                     $jobDetails = (Receive-Job -Job $_ -Keep)
@@ -437,12 +438,18 @@ Start-Sleep -Seconds 5
                     Write-Output "$(($failedJobs | Measure-Object).Count) jobs failed out of $Global:totalJobs jobs"
                     $failedJobs | Select-Object Id, Name, State, HasMoreData | Format-Table -AutoSize -RepeatHeader
                     $failedJobs | Select-Object Id, Name, State | Export-Csv -Path (Join-Path $folderName 'listOfFailedJobs.csv') -NoTypeInformation -Force
-                    'Name,Id,State,Reason' | Out-File -FilePath (Join-Path $folderName 'failedJobError.csv') -Force
+                    #'Name,Id,State,Reason' | Out-File -FilePath (Join-Path $folderName 'failedJobError.csv') -Force
                     $failedJobs | ForEach-Object {
                         ($_ | Select-Object Id, Name, State | Format-Table -AutoSize -HideTableHeaders)
                         $errorDetails = $_.ChildJobs.JobStateInfo.Reason -join ';'
                         Write-Output $errorDetails
-                        "$(($_.Name)),$(($_.Id)),$(($_.State)),$(($errorDetails -replace '^System.Management.Automation.RemoteException:', '' ))" | Out-File -FilePath (Join-Path $folderName 'failedJobError.csv') -Append -Force
+                        #"$(($_.Name)),$(($_.Id)),$(($_.State)),$(($errorDetails -replace '^System.Management.Automation.RemoteException:', '' ))" | Out-File -FilePath (Join-Path $folderName 'failedJobError.csv') -Append -Force
+                        [PSCustomObject]@{
+                            'Name'   = $_.Name
+                            'Id'     = $_.Id
+                            'State'  = $_.State
+                            'Reason' = $errorDetails -replace '^System.Management.Automation.RemoteException:', ''
+                        } | Export-Csv -Path (Join-Path $folderName 'failedJobError.csv') -Append -NoTypeInformation -Force
                     }
                 }
                 Write-Output 'All Jobs Finished'
@@ -468,12 +475,12 @@ Start-Sleep -Seconds 5
     Set-Location (Join-Path $wrkdir $reportTempDir)
     $csvFiles = Get-ChildItem -Path . -Filter *.csv
     $fileIdx = 0
-    $VmOutputs = @()
+    $VmOutputs = [System.Collections.Generic.List[object]]::new()
     foreach ($csv in $csvFiles) {
         $fileIdx++
         $percent = [Math]::Round(($fileIdx / $csvFiles.Count) * 100)
         Update-Progress -Status "Aggregating $($csv.Name) ($fileIdx / $($csvFiles.Count))" -Percent $percent
-        $VmOutputs += Import-Csv -Path $csv.FullName
+        $VmOutputs.AddRange([object[]](Import-Csv -Path $csv.FullName))
     }
 
     $report = foreach ($output in $VmOutputs) {
@@ -537,10 +544,11 @@ $vmList = Import-Csv $filePath
 $runName = "Run-$(Get-Date -Format 'dd-MM-yyyyThh-mm')"
 Set-Location $PSScriptRoot
 Invoke-PatchReport -VmList ($vmList) -MaxJob 30 -runName $runName
+Set-Location (Split-Path -Path (Get-Location) -Parent)
 if ((Test-Path (Join-Path $runName 'failedJobError.csv')) -or (Test-Path (Join-Path $runName 'notStartedJobs.csv'))) {
     $retryTable = @{}
     # Build a hash table of VM name => array of VM objects (preserves duplicates)
-    $vmList | ForEach-Object {
+    $vmList | Select-Object -Property * -ExcludeProperty retry, reportTempDir | ForEach-Object {
         if ($retryTable.ContainsKey($_.Name)) {
             $retryTable[$_.Name] += $_
         }
