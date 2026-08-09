@@ -1,6 +1,6 @@
 #
 $filePath = 'vms.csv'
-$jobs = 30
+$jobCount = 30
 $execute = {
     # Something
 }
@@ -291,7 +291,7 @@ Set-Location $workdir
 $runName = "Run-$(Get-Date -Format 'dd-MM-yyyyThh-mm')"
 
 $vmList = Import-Csv $filePath
-Invoke-Jobs -VmList ($vmList) -MaxJob $jobs -execute $execute -runName $runName -workPath $workdir
+Invoke-Jobs -VmList ($vmList) -MaxJob $jobCount -execute $execute -runName $runName -workPath $workdir
 
 if (
     (Test-Path (Join-Path $runName 'failedJobError.csv')) -or
@@ -319,7 +319,7 @@ if (
         $retryInputs | Format-Table
         $resp = Read-Host
         if ($resp -in @('y', 'Y')) {
-            Invoke-Jobs -VmList $retryInputs -MaxJob $jobs -runName "Retry-$($runName)" -workPath $workdir
+            Invoke-Jobs -VmList $retryInputs -MaxJob $jobCount -runName "Retry-$($runName)" -workPath $workdir
     
         }
     }
