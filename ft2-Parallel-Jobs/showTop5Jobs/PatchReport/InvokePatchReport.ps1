@@ -173,7 +173,7 @@ function Invoke-PatchReport {
         $Global:jobCounter = 0
         $Global:totalJobs = 0
 
-        $progressBar = $true
+        $Global:progressBar = $true
         $cleanUp = $true
     }
 
@@ -239,25 +239,119 @@ function Invoke-PatchReport {
             }
         }
 
-        # implement limit to try on few VMs first.
-        # $limit = ''
-        if ( (Test-Path Variable:\limit) -and ($null -ne $limit) -and ($limit -ne '') ) {
-            if ( ($limit.GetType().ToString() -eq 'System.Int32') -and ($limit -lt $vms.Count) ) {
-                $vms = $vms | Select-Object -First $limit
-            }
-            elseif ($limit.GetType().ToString() -eq 'System.String') {
-                $vms = $vms | Where-Object { $_.Name -eq $limit } 
-            }
-            elseif ($limit.GetType().ToString() -eq 'System.Object[]') {
-                $limitTable = @{}
-                $vms | ForEach-Object { $limitTable[$_.Name] = $_ }
-                $vms = foreach ($item in $limit) { $limitTable[$item] } 
+        function Update-Column {
+            param (
+                [Parameter(Mandatory = $true)]
+                [ValidateNotNullOrEmpty()]
+                [Object[]]$inputs,
+                [ValidateNotNullOrEmpty()]
+                [string]$column = 'Name'
+            )
+
+            $columnExists = $inputs[0].PSObject.Properties.Name -contains $column
+            $columns = $inputs[0].PSObject.Members | Where-Object { $_.MemberType -eq 'NoteProperty' } | Select-Object -ExpandProperty Name
+            # 
+            if ( $columnExists) {
+                if ($inputs.Count -eq ($inputs.$column | Select-Object -Unique).Count) {
+                    return $inputs
+                }
+                else {
+                    Write-Warning "Column $column has duplicate values"
+                    $colCount = @{}
+                    foreach ( $instance in $inputs) {
+                        $value = $instance.$column
+                        if ($colCount.ContainsKey($value)) {
+                            $colCount[$value]++
+                            $instance | Add-Member -NotePropertyName $column -NotePropertyValue "$($value)#$($colCount[$value])" -Force
+                        }
+                        else {
+                            $colCount[$value] = 0
+                        }
+                    }
+                    return $inputs
+                }
             }
             else {
-                Write-Warning 'Limit is not valid.'
-                return
+                Write-Warning "Column '$column' not found in input. Available columns: $columns"
+                $foundOtherColumn = $false
+                foreach ( $col in $columns) {
+                    if (($inputs.Count) -eq ($inputs.$col | Select-Object -Unique).Count) {
+                        $foundOtherColumn = $true
+                        Write-Warning "Found unique column: $col"
+                        $inputs | ForEach-Object { $_ | Add-Member -NotePropertyName $column -NotePropertyValue ( $_.$col) }
+                        return $inputs
+                    }
+                }
+
+                if (-not $foundOtherColumn) {
+                    Write-Warning "No unique column found in input. Available columns: $columns"
+                    for ($i = 0; $i -lt $inputs.Count; $i++) {
+                        $inputs[$i] | Add-Member -NotePropertyName $column -NotePropertyValue "$(($inputs[$i].($columns[0])))#$i"
+                    } 
+                    return $inputs
+                }
             }
-            if ($vms.Count -gt 0) {
+        }
+
+        # implement limit to try on few VMs first.
+        function Limit-Input {
+            param(
+                [Parameter(Mandatory = $true)]
+                [Object[]]$inputs,
+                [Parameter(Mandatory = $true)]
+                [ValidateNotNullOrEmpty()]
+                [Object]$limit,
+                [ValidateNotNullOrEmpty()]
+                [string]$col = 'Name'
+            ) 
+
+            if (($limit.GetType().ToString() -ne 'System.Int32') -and ($col -notin ($inputs[0].PSObject.Members | Where-Object { ($_.MemberType -eq 'NoteProperty') } | Select-Object -ExpandProperty Name ) ) ) {
+                Write-Warning 'Please provide a valid column name.'
+                return 
+            }
+
+            if (($limit -is [int]) ) {
+                if ($limit -gt $inputs.Count) {
+                    Write-Warning "Limit ($limit) is greater than the number of inputs ($($inputs.Count))."
+                    return $inputs
+                }
+                else {
+                    return $inputs | Select-Object -First $limit
+                } 
+
+            }
+            elseif (($limit -is [string]) -and ($limit -ne '')) {
+                $matchedInputs = $inputs | Where-Object { ($_ | Select-Object -ExpandProperty $col) -match $limit }
+                if ($matchedInputs) {
+                    return $matchedInputs
+                }
+                else {
+                    return 
+                }
+                
+            }
+            elseif (($limit -is [array])) {
+                $returnInput = foreach ($item in $limit) { 
+                    $inputs.Where({ ($_.$col) -match $item }) 
+                }
+                if ($returnInput) { 
+                    return $returnInput
+                }
+                else {
+                    return 
+                }
+            }
+            else {
+                Write-Warning 'Please provide a valid limit.'
+                return 
+            }
+        } 
+
+
+        # $limit = ''
+        if (($null -ne $limit) -and ($limit -ne '')) {
+            $vms = Limit-Input -inputs $vms -limit $limit
+            if ( $vms -and ($vms.Count -gt 0)) {
                 Write-Output "Continue to try on below VMs?"
                 $vms | Format-Table -AutoSize -Wrap
                 $continue = Read-Host "Continue (y/n)"
@@ -266,7 +360,7 @@ function Invoke-PatchReport {
                 }
             }
             else {
-                Write-Warning 'No VMs to try on. Please check the limit.'
+                Write-Warning 'Please check the limit.'
                 return
             }
         }
@@ -363,7 +457,7 @@ Start-Sleep -Seconds 5
 
             $stopFlagFiles = Get-ChildItem -Path $WorkingDirectory -Filter 'StopJob_*.txt' -File -ErrorAction SilentlyContinue
             foreach ($file in $stopFlagFiles) {
-                if ($file.BaseName -match '^StopJob_(\\d+)$') {
+                if ($file.BaseName -match '^StopJob_(\d+)$') {
                     $jobId = $Matches[1]
                     $job = Get-Job -Id $jobId -ErrorAction SilentlyContinue
                     if ($job -and $job.State -eq 'Running') {
@@ -410,7 +504,7 @@ Start-Sleep -Seconds 5
                 [string]$Status,
                 [int]   $Percent = $null
             )
-            if ($progressBar) {
+            if ($Global:progressBar) {
                 $activity = 'Running Patch Report'
                 if ($null -ne $Percent) {
                     Write-Progress -Activity $activity -Status $Status -PercentComplete $Percent
@@ -420,6 +514,72 @@ Start-Sleep -Seconds 5
                 }
             } 
 
+        }
+
+        function Invoke-BreakLoopProcessing {
+            param (
+                [string]$WorkingDirectory,
+                [Object[]]$processJobs,
+                [string]$logPath
+
+            )
+            if (Test-Path (Join-Path $WorkingDirectory 'Break_Loop')) {
+                Write-Output 'Break_Loop flag detected, exiting job monitoring loop.'
+                foreach ($j in $processJobs) {
+                    [PSCustomObject]@{ Name = $j.Name; Id = $j.Id; State = 'Skipped'; Reason = 'Break_Loop flag' } |
+                    Export-Csv -Path $logPath -NoTypeInformation -Append -Force
+                }
+                Remove-Item -Path (Join-Path $WorkingDirectory 'Break_Loop') -Force -ErrorAction SilentlyContinue
+                return $true
+            }
+            else {
+                return $false
+            }
+            
+        }
+
+        function Invoke-FailedJobsProcessing {
+            param (
+
+                [Parameter(Mandatory = $true)]
+                [ValidateNotNullOrEmpty()]
+                [object[]]$processJobs,
+
+                [Parameter(Mandatory = $true)]
+                [ValidateNotNullOrEmpty()]
+                [string]$runFolder
+            )
+            $processJobs | Select-Object Id, Name, State | Export-Csv -Path (Join-Path $runFolder 'listOfFailedJobs.csv') -NoTypeInformation -Force
+            $processJobs | ForEach-Object {
+                $_ | Select-Object Id, Name, State | Format-Table -AutoSize -HideTableHeaders
+                $errorDetails = $_.ChildJobs.JobStateInfo.Reason -join ';'
+                [PSCustomObject]@{
+                    'Id'     = $_.Id
+                    'Name'   = $_.Name
+                    'State'  = $_.State
+                    'Reason' = $errorDetails -replace '^System.Management.Automation.RemoteException:', ''
+                } | Export-Csv -Path (Join-Path $runFolder 'failedJobError.csv') -NoTypeInformation -Append -Force
+            }
+        }
+
+        function Get-JobTranscript {
+            param (
+
+                [Parameter(Mandatory = $true)]
+                [ValidateNotNullOrEmpty()]
+                [object[]]$inputJobs,
+
+                [Parameter(Mandatory = $true)]
+                [ValidateNotNullOrEmpty()]
+                [string]$folder
+            )
+            
+            Start-Transcript -Path (Join-Path $folder 'allJobs.txt') -Force
+            $inputJobs | ForEach-Object {
+                ($_ | Select-Object Id, Name, State, HasMoreData | Format-Table -AutoSize -HideTableHeaders)
+                (Receive-Job -Job $_ -Keep)
+            }
+            Stop-Transcript
         }
 
         $showFailedJob = $true
@@ -482,34 +642,15 @@ Start-Sleep -Seconds 5
                     # All work done - final 100 % progress
                     Update-Progress -Status 'All jobs finished - aggregating results' -Percent 100
                     Save-JobLog -JobList $Global:jobs -TargetFolder $folderName
-                    Start-Transcript -Path (Join-Path $folderName 'allJobs.txt') -Force #"./$folderName/allJobs.txt" -Force
-                    $Global:jobs | ForEach-Object {
-                        ($_ | Select-Object Id, Name, State, HasMoreData | Format-Table -AutoSize -HideTableHeaders)
-                        $jobDetails = (Receive-Job -Job $_ -Keep)
-                        Write-Output $jobDetails
-                    }
-                    Stop-Transcript
+                    Get-JobTranscript -InputJobs $Global:jobs -Folder $folderName
                     $failedJobs = $Global:jobs | Where-Object { ($_.State -eq 'Failed') -and ($_.HasMoreData -eq $true) }
                     $proc = Show-FailingJobsWindow -JobList $Global:jobs -TargetFolder $folderName -FailFlagRef ([ref]$failFlag) -ShowFailedJob $showFailedJob -CurrentProc $proc
                     if ($null -ne $proc) { Stop-Process -Id $proc.Id }
                     if (($failedJobs | Measure-Object).Count -gt 0) {
                         Write-Output 'Following Jobs Failed. Please Check'
                         Write-Output "$(($failedJobs | Measure-Object).Count) jobs failed out of $Global:totalJobs jobs"
-                        $failedJobs | Select-Object Id, Name, State, HasMoreData | Format-Table -AutoSize -RepeatHeader
-                        $failedJobs | Select-Object Id, Name, State | Export-Csv -Path (Join-Path $folderName 'listOfFailedJobs.csv') -NoTypeInformation -Force
-                        #'Name,Id,State,Reason' | Out-File -FilePath (Join-Path $folderName 'failedJobError.csv') -Force
-                        $failedJobs | ForEach-Object {
-                            ($_ | Select-Object Id, Name, State | Format-Table -AutoSize -HideTableHeaders)
-                            $errorDetails = $_.ChildJobs.JobStateInfo.Reason -join ';'
-                            Write-Output $errorDetails
-                            #"$(($_.Name)),$(($_.Id)),$(($_.State)),$(($errorDetails -replace '^System.Management.Automation.RemoteException:', '' ))" | Out-File -FilePath (Join-Path $folderName 'failedJobError.csv') -Append -Force
-                            [PSCustomObject]@{
-                                'Name'   = $_.Name
-                                'Id'     = $_.Id
-                                'State'  = $_.State
-                                'Reason' = $errorDetails -replace '^System.Management.Automation.RemoteException:', ''
-                            } | Export-Csv -Path (Join-Path $folderName 'failedJobError.csv') -Append -NoTypeInformation -Force
-                        }
+                        $failedJobs | Select-Object Id, Name, State | Format-Table -AutoSize -RepeatHeader
+                        Invoke-FailedJobsProcessing -processJobs $failedJobs -runFolder $folderName
                     }
                     Write-Output 'All Jobs Finished'
                     Write-Output "$(($failedJobs | Measure-Object).Count) jobs failed out of $Global:totalJobs jobs"
@@ -598,13 +739,15 @@ Start-Sleep -Seconds 5
         # Clean up global variables and jobs
         if ($cleanUp) {
             $Global:jobs | Remove-Job -Force
-            @('totalJobs','jobCounter','jobs') | Remove-Variable -Scope Global
+            @('totalJobs', 'jobCounter', 'jobs') | ForEach-Object { Remove-Variable -Name $_ -Scope Global }
         }
 
     }
 }
 
 
+# Only run the driver code if this script is being executed directly (not sourced for testing)
+if ($MyInvocation.InvocationName -eq $MyInvocation.MyCommand.Path) {
     $filePath = 'vms.csv'
     $vmList = Import-Csv $filePath
     $runName = "Run-$(Get-Date -Format 'dd-MM-yyyyThh-mm')"
@@ -623,7 +766,7 @@ Start-Sleep -Seconds 5
                 $retryTable[$_.Name] = @($_)
             }
         }
-    
+        
         $retryInputs = foreach ( $file in @(
                 (Join-Path $runName 'failedJobError.csv'),
                 (Join-Path $runName 'notStartedJobs.csv')
@@ -648,12 +791,91 @@ Start-Sleep -Seconds 5
         (Join-Path $runName 'timeoutJobs.csv'),
         (Join-Path $runName 'skippedJobs.csv'),
         (Join-Path $runName 'stoppedJobs.csv'),
-        (Join-Path "Retry-$runName" 'timeoutJobs.csv'),
-        (Join-Path "Retry-$runName" 'stoppedJobs.csv'),
-        (Join-Path "Retry-$runName" 'skippedJobs.csv'),
-        (Join-Path "Retry-$runName" 'failedJobError.csv')
-    ) | Where-Object { Test-Path $_ } | ForEach-Object {
-        Import-Csv $_ | Format-Table -AutoSize -Property Name, Id, State, Reason
+        (Join-Path $runName 'failedJobError.csv')
+    ) | ForEach-Object {
+        if (Test-Path $_) {
+            Import-Csv $_ | Format-Table
+        }
     }
+}
 
+# --------------------------------------------------------
+# PESTER TESTS
+# --------------------------------------------------------
+# Comprehensive Pester tests for Invoke-PatchReport are available in:
+# Invoke-PatchReport.Tests.ps1
+# 
+# To run the tests:
+# 1. Ensure Pester is installed: Install-Module -Name Pester -Force -Scope CurrentUser
+# 2. Run tests: Invoke-Pester -Path .\Invoke-PatchReport.Tests.ps1
+#
+# Test coverage includes:
+# - Job timeout feature
+# - Progress bar functionality  
+# - Limit parameter validation
+# - Pipeline input processing
+# - Break_Loop flag handling
+# - Stop job processing
+# - Integration scenarios
 
+# --------------------------------------------------------
+# PERFORMANCE & MAINTENANCE CHECKLIST
+# --------------------------------------------------------
+# DONE
+#   ✔ Refactored to accept VM objects (pipeline) instead of CSV path only.
+#   ✔ Extract duplicate wait-loop branches into helper functions.
+#   ✔ Fixed PSScriptAnalyzer warnings (unapproved verbs, where alias).
+#   ✔ Enhanced comment block with .NOTES and .LINK sections.
+#   ✔ Combined multiple where clauses into single scriptblocks for performance.
+#   ✔ Document/enforce unique VM names for -Name on Start-Job.
+#   ✔ Remove comment remnants from refactored code (lines 333, 353, 375).
+#   ✔ Implemented single-pass duplicate name handling via hashtable.
+#   ✔ Added fallback Name generation using first column + index when no unique column exists.
+#   ✔ Restored and centralized Update-Progress function with progress initialization.
+#   ✔ Added retry‑inputs handling to re‑invoke the report on user confirmation.
+#   ✔ Created test CSV files (testcaseA.csv, testcaseB.csv) for validation of Name handling.
+#   ✔ Standardize spacing in Where-Object scriptblocks for consistency.
+#   ✔ Add progress indicators using Write-Progress for long‑running operations.
+#   ✔ Replace Write-Host with Write-Output or logging framework for better pipeline support.
+#   ✔ Add parameter validation using ValidateNotNullOrEmpty, ValidateRange, etc.
+#   ✔ Validate required VM properties before Start-Job.
+#   ✔ Add error handling for missing VM properties (Name, ResourceGroup, Subscription).
+#   ✔ Fix string interpolation: using "$($_.Name)" correctly instead of "$_.Name" (L379, L403).
+#   ✔ Replace `$Global:jobs += $job` and `$VmOutputs +=` with [System.Collections.Generic.List[object]] to avoid O(n²) array copies (L163, L478).
+#   ✔ Use $Global: consistently for reads — `$Global:jobCounter` instead of bare `$jobCounter` (L375, L399, L405).
+#   ✔ Replace all relative paths with Join-Path for consistency (L256-259, L274, L440, L447).
+#   ✔ Replace manual CSV string building with Export-Csv — handles commas/quotes correctly (L447-452).
+#   ✔ Remove unused global variables: $Global:jobErrors and $Global:errorFile were not present in code.
+#   ✔ Replace `ft` alias with `Format-Table` in Show-FailingJobsWindow (L274).
+#
+# TODO - bugs (correctness)
+#   ✔ Fix pipeline input: param has ValueFromPipeline but no begin/process/end blocks (L61).
+#     Piping VMs one-at-a-time silently drops all but the last. Either remove
+#     ValueFromPipeline or add proper process{} accumulation.
+#
+# TODO - performance
+#   ☐ Capture Receive-Job output once in Save-JobLog instead of calling it 2-3 times (L256-260).
+#
+# TODO - reliability
+#   ☐ Remove-Job after final Receive-Job to avoid job table buildup.
+#   ☐ Implement exponential backoff for retry logic (currently linear: 30s, 60s, 90s).
+#   ☐ Use `$vmStatus.Statuses | Where-Object { $_.Code -like 'PowerState/*' }` instead of
+#     hardcoded `$vmStatus.Statuses[1]` (L90) — the index can vary by VM state.
+#
+# TODO - maintainability
+#   ☐ Replace $Global: with $script: inside Invoke-PatchReport.
+#   ☐ Move bottom driver block (Import-Csv, retry prompt) to a separate runner script.
+#   ☐ Add unit tests for helper functions (Invoke-StopFlagProcessing, Invoke-JobTimeoutCheck).
+#   ☐ Replace all `Set-Location` calls with Push-Location/Pop-Location in try/finally,
+#     or compute absolute paths and avoid directory changes entirely (L155, L220, L468, L538).
+#   ☐ Clean up Report-Temp-* directory after CSV aggregation (L222 creates but never deletes).
+#
+# TODO - code quality
+#   ☐ Implement ShouldProcess for -WhatIf and -Confirm support.
+#
+# OPTIONAL (low priority)
+#   ☐ $using: instead of -ArgumentList — only if initTask merge is removed; not required.
+#   ☐ ForEach-Object -Parallel (PS 7+) — only if moving off Start-Job.
+#   ☐ Add support for Linux VMs with appropriate patch collection logic.
+#   ☐ Implement job result aggregation and summary statistics.
+# -------------------------------------------------------------------------------------------------
