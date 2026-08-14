@@ -57,6 +57,7 @@ function Invoke-PatchReport {
         $Global:jobCounter = 0
         $Global:totalJobs = 0
 
+        $showFailedJob = $true
         $progressBar = $true
         $cleanUp = $false
         $processing = $false
@@ -459,7 +460,7 @@ Start-Sleep -Seconds 5
         }
 
 
-        $showFailedJob = $true
+        # $showFailedJob = $true
         $failFlag = 2
         $proc = $null 
 
@@ -522,7 +523,7 @@ Start-Sleep -Seconds 5
                     Get-JobTranscript -InputJobs $Global:jobs -Folder $folderName
                     $failedJobs = $Global:jobs | Where-Object { ($_.State -eq 'Failed') -and ($_.HasMoreData -eq $true) }
                     $proc = Show-FailingJobsWindow -JobList $Global:jobs -TargetFolder $folderName -FailFlagRef ([ref]$failFlag) -ShowFailedJob $showFailedJob -CurrentProc $proc
-                    if (($null -ne $proc) -and (Get-Process -Id $proc.Id)) { Stop-Process -Id $proc.Id }
+                    if (($null -ne $proc) -and (Get-Process -Id $proc.Id -ErrorAction SilentlyContinue)) { Stop-Process -Id $proc.Id }
                     if (($failedJobs | Measure-Object).Count -gt 0) {
                         Write-Output 'Following Jobs Failed. Please Check'
                         Write-Output "$(($failedJobs | Measure-Object).Count) jobs failed out of $Global:totalJobs jobs"
