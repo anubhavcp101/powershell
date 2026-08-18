@@ -14,7 +14,7 @@ $execute = {
     Write-Output 'Running from Inside'
 }
 
-function Invoke-PatchReport {
+function Invoke-Jobs {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory = $true, ValueFromPipeline = $true)]
@@ -394,7 +394,7 @@ Start-Sleep -Seconds 5
                 [int]   $Percent = $null
             )
             if ($progressBar) {
-                $activity = 'Running Patch Report'
+                $activity = 'Running Report'
                 if ($null -ne $Percent) {
                     Write-Progress -Activity $activity -Status $Status -PercentComplete $Percent
                 }
@@ -598,8 +598,8 @@ Set-Location $workdir
 
 $vmList = Import-Csv $filePath
 $runName = "Run-$(Get-Date -Format 'dd-MM-yyyyThh-mm')"
-# $vmList[0] | Invoke-PatchReport -MaxJob 11 -runName $runName
-Invoke-PatchReport -VmList $vmList -MaxJob $jobCount -runName $runName -execute $execute -workPath $workdir
+# $vmList[0] | Invoke-Jobs -MaxJob 11 -runName $runName
+Invoke-Jobs -VmList $vmList -MaxJob $jobCount -runName $runName -execute $execute -workPath $workdir
 if ((Test-Path (Join-Path $runName 'failedJobError.csv')) -or (Test-Path (Join-Path $runName 'notStartedJobs.csv'))) {
     $retryTable = @{}
     # Build a hash table of VM name => array of VM objects (preserves duplicates)
@@ -626,7 +626,7 @@ if ((Test-Path (Join-Path $runName 'failedJobError.csv')) -or (Test-Path (Join-P
         $retryInputs | Format-Table
         $resp = Read-Host
         if ($resp -in @('y', 'Y')) {
-            Invoke-PatchReport -VmList $retryInputs -MaxJob $jobCount -runName "Retry-$runName" -execute $execute -workPath $workdir
+            Invoke-Jobs -VmList $retryInputs -MaxJob $jobCount -runName "Retry-$runName" -execute $execute -workPath $workdir
         }
     }
 }
