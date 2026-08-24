@@ -112,6 +112,7 @@ function Invoke-PatchReport {
                         $commandOutput = Invoke-AzVMRunCommand -VMName $Name.trim() -ResourceGroupName $resourceGroup.trim() -CommandId 'RunPowerShellScript' -ScriptString $hotfixBlock.ToString() -DefaultProfile $ctx -ErrorAction Stop
                         if ($?) {
                             $commandStatus = 'Success'
+                            Write-Output $commandOutput.Value[0].Message.trim()
                             break
                         }
                     }
@@ -164,7 +165,30 @@ function Invoke-PatchReport {
             Set-Location $workdir
             $tmpVm.PSObject.Members | Where-Object { ($_.MemberType -eq 'NoteProperty') -and ($_.Name -ne 'Name') } | ForEach-Object { New-Variable -Name "$($_.Name)".Replace(' ', '') -Value $_.Value } 
             $tmpVm.PSObject.Members | Where-Object { ($_.MemberType -eq 'NoteProperty') -and ($_.Name -eq 'Name') } | ForEach-Object { New-Variable -Name "$($_.Name)".Replace(' ', '') -Value "$(($_.Value -split '#')[0])" }
-            Write-Output 'Starting Job for' $tmpVm.Name
+            Write-Output "Starting Job for $($tmpVm.Name)"
+
+            # Trap Block to capture error for each job
+            # but doesn't get along with try-catch block for retry logic
+            # so need to disable this if there is a retry logic in the script block
+            # still if you want to use then use `continue` keyword with trap so that it doesn't break the retry logic
+            trap {
+                $errorMsg = "$($Name) : $($PID) : Error occurred : $($PSItem.ToString()): $($PSItem.ScriptStackTrace)"
+                if ($reportTempDir) {
+                    $errorMsg | Out-File -FilePath (Join-Path $reportTempDir "$($Name)_$($PID)_Error.txt") -Append -Force
+                }
+                else {
+                    $errFilePath = Get-ChildItem -Directory | Where-Object { $_.Name -like "Run-Trap-*" } | Sort-Object -Property CreationTime -Descending | Select-Object -First 1 | Select-Object -ExpandProperty FullName
+                    if ( Test-Path -Path $errFilePath ) {
+                        $errorMsg | Out-File -FilePath ( Join-Path $errFilePath "$($Name)_$($PID)_Error.txt") -Append -Force
+                    }
+                    else {
+                        $trapDir = "Run-Trap-$(Get-Date -Format 'dd-MM-yyyy-hh-mm')"
+                        New-Item -Path "$($trapDir)" -ItemType Directory -Force | Out-Null
+                        $errorMsg | Out-File -FilePath ( Join-Path "$($trapDir)" "$($Name)_$($PID)_Error.txt") -Append -Force
+                    }
+                }
+                break 
+            }
         }
 
         $task = [scriptblock]::Create($initTask.ToString() + "`n" + $task.ToString())
@@ -194,7 +218,15 @@ function Invoke-PatchReport {
         $vms = @($accumulatedVmList)
         $totalVMs = $vms.Count
 
-        $columns = $accumulatedVmList[0].PSObject.Members | Where-Object { $_.MemberType -eq 'NoteProperty' } | Select-Object -ExpandProperty Name
+        # $columns = $accumulatedVmList[0].PSObject.Members | Where-Object { $_.MemberType -eq 'NoteProperty' } | Select-Object -ExpandProperty Name
+        
+        # Checking if $accumulatedVmList is array or not and then accordingly getting columns from it.
+        if ($accumulatedVmList -is [Array]) {
+            $columns = $accumulatedVmList[0].PSObject.Members | Where-Object { $_.MemberType -eq 'NoteProperty' } | Select-Object -ExpandProperty Name
+        }
+        else {
+            $columns = $accumulatedVmList.PSObject.Members | Where-Object { $_.MemberType -eq 'NoteProperty' } | Select-Object -ExpandProperty Name
+        }
 
         $missing = Compare-Object -ReferenceObject $requiredColumns -DifferenceObject $columns | Where-Object { ($_.SideIndicator -eq '<=') } 
         if ( $missing ) { $missing | ForEach-Object { Write-Warning "Missing column: $($_.InputObject)" }; return 1 }  
@@ -673,19 +705,20 @@ Start-Sleep -Seconds 5
         Get-ChildItem -Path (Join-Path $outputXmlDir '*.xml') | Select-Object BaseName, @{Name = 'ErrMsg'; Exp = { Get-Item -Path $_.fullName | Import-Clixml | Where-Object { $_.writeErrorStream -eq $true } | Select-Object -ExpandProperty TargetObject } } | Export-Csv -NoTypeInformation -Force -Path (Join-Path $outputXmlDir 'error.csv')
 
         Write-Output 'Processing'
-        Set-Location (Join-Path $wrkdir $reportTempDir)
+        # Set-Location (Join-Path $wrkdir $reportTempDir)
+        Push-Location (Join-Path $wrkdir $reportTempDir)
         $csvFiles = Get-ChildItem -Path . -Filter *.csv
         $fileIdx = 0
         $VmOutputs = [System.Collections.Generic.List[object]]::new()
         foreach ($csv in $csvFiles) {
             $fileIdx++
             $percent = [Math]::Round(($fileIdx / $csvFiles.Count) * 100)
-            Update-Progress -Status "Aggregating $($csv.Name) ($fileIdx / $($csvFiles.Count))" -Percent $percent
+            # Update-Progress -Status "Aggregating $($csv.Name) ($fileIdx / $($csvFiles.Count))" -Percent $percent
             $VmOutputs.AddRange([object[]](Import-Csv -Path $csv.FullName))
         }
 
         $report = foreach ($output in $VmOutputs) {
-            if ($output.CommandStatus -eq 'Success') {
+            if (($output.CommandStatus -eq 'Success') -and (($output.CommandOutput -split '#').Length -eq 4)) {
                 $outputDetails = $output.CommandOutput -split '#'
                 [PSCustomObject]@{
                     'VMName'        = $output.VM
@@ -709,10 +742,11 @@ Start-Sleep -Seconds 5
                 }
             }
         }
+        Pop-Location
 
-        $reportPath = Join-Path $wrkdir "Report-$(Get-Date -Format 'dd-MM-yyyy-hh-mm').csv"
-        $report | Export-Csv -NoTypeInformation -Force -Path $reportPath
-        Write-Output "Report Generated at: $($reportPath)"
+        $reportLocation = Join-Path $wrkdir "Report-$(Get-Date -Format 'dd-MM-yyyy-hh-mm').csv"
+        $report | Export-Csv -NoTypeInformation -Force -Path $reportLocation
+        Write-Output "Report Generated at: $($reportLocation)"
 
         $summaryFile = Join-Path $folderName 'jobSummary.csv'
         $notStartedLog = Join-Path $folderName 'notStartedJobs.csv'
@@ -726,8 +760,8 @@ Start-Sleep -Seconds 5
         foreach ($lf in $logFiles) {
             if (Test-Path $lf) { Import-Csv $lf | Export-Csv -Path $summaryFile -NoTypeInformation -Append -Force }
         }
-        if (Test-Path $reportPath) {
-            $finalReport = Import-Csv $reportPath
+        if (Test-Path $reportLocation) {
+            $finalReport = Import-Csv $reportLocation
             foreach ($r in $finalReport) {
                 $state = if ($r.CommandStatus -eq 'Success') { 'Completed' } else { 'Failed' }
                 $reason = if ($state -eq 'Failed') { $r.CommandOutput } else { '' }
@@ -799,83 +833,3 @@ if ($MyInvocation.InvocationName -eq $MyInvocation.MyCommand.Path) {
     }
 }
 
-# --------------------------------------------------------
-# PESTER TESTS
-# --------------------------------------------------------
-# Comprehensive Pester tests for Invoke-PatchReport are available in:
-# Invoke-PatchReport.Tests.ps1
-# 
-# To run the tests:
-# 1. Ensure Pester is installed: Install-Module -Name Pester -Force -Scope CurrentUser
-# 2. Run tests: Invoke-Pester -Path .\Invoke-PatchReport.Tests.ps1
-#
-# Test coverage includes:
-# - Job timeout feature
-# - Progress bar functionality  
-# - Limit parameter validation
-# - Pipeline input processing
-# - Break_Loop flag handling
-# - Stop job processing
-# - Integration scenarios
-
-# --------------------------------------------------------
-# PERFORMANCE & MAINTENANCE CHECKLIST
-# --------------------------------------------------------
-# DONE
-#   ✔ Refactored to accept VM objects (pipeline) instead of CSV path only.
-#   ✔ Extract duplicate wait-loop branches into helper functions.
-#   ✔ Fixed PSScriptAnalyzer warnings (unapproved verbs, where alias).
-#   ✔ Enhanced comment block with .NOTES and .LINK sections.
-#   ✔ Combined multiple where clauses into single scriptblocks for performance.
-#   ✔ Document/enforce unique VM names for -Name on Start-Job.
-#   ✔ Remove comment remnants from refactored code (lines 333, 353, 375).
-#   ✔ Implemented single-pass duplicate name handling via hashtable.
-#   ✔ Added fallback Name generation using first column + index when no unique column exists.
-#   ✔ Restored and centralized Update-Progress function with progress initialization.
-#   ✔ Added retry‑inputs handling to re‑invoke the report on user confirmation.
-#   ✔ Created test CSV files (testcaseA.csv, testcaseB.csv) for validation of Name handling.
-#   ✔ Standardize spacing in Where-Object scriptblocks for consistency.
-#   ✔ Add progress indicators using Write-Progress for long‑running operations.
-#   ✔ Replace Write-Host with Write-Output or logging framework for better pipeline support.
-#   ✔ Add parameter validation using ValidateNotNullOrEmpty, ValidateRange, etc.
-#   ✔ Validate required VM properties before Start-Job.
-#   ✔ Add error handling for missing VM properties (Name, ResourceGroup, Subscription).
-#   ✔ Fix string interpolation: using "$($_.Name)" correctly instead of "$_.Name" (L379, L403).
-#   ✔ Replace `$Global:jobs += $job` and `$VmOutputs +=` with [System.Collections.Generic.List[object]] to avoid O(n²) array copies (L163, L478).
-#   ✔ Use $Global: consistently for reads — `$Global:jobCounter` instead of bare `$jobCounter` (L375, L399, L405).
-#   ✔ Replace all relative paths with Join-Path for consistency (L256-259, L274, L440, L447).
-#   ✔ Replace manual CSV string building with Export-Csv — handles commas/quotes correctly (L447-452).
-#   ✔ Remove unused global variables: $Global:jobErrors and $Global:errorFile were not present in code.
-#   ✔ Replace `ft` alias with `Format-Table` in Show-FailingJobsWindow (L274).
-#
-# TODO - bugs (correctness)
-#   ✔ Fix pipeline input: param has ValueFromPipeline but no begin/process/end blocks (L61).
-#     Piping VMs one-at-a-time silently drops all but the last. Either remove
-#     ValueFromPipeline or add proper process{} accumulation.
-#
-# TODO - performance
-#   ☐ Capture Receive-Job output once in Save-JobLog instead of calling it 2-3 times (L256-260).
-#
-# TODO - reliability
-#   ☐ Remove-Job after final Receive-Job to avoid job table buildup.
-#   ☐ Implement exponential backoff for retry logic (currently linear: 30s, 60s, 90s).
-#   ☐ Use `$vmStatus.Statuses | Where-Object { $_.Code -like 'PowerState/*' }` instead of
-#     hardcoded `$vmStatus.Statuses[1]` (L90) — the index can vary by VM state.
-#
-# TODO - maintainability
-#   ☐ Replace $Global: with $script: inside Invoke-PatchReport.
-#   ☐ Move bottom driver block (Import-Csv, retry prompt) to a separate runner script.
-#   ☐ Add unit tests for helper functions (Invoke-StopFlagProcessing, Invoke-JobTimeoutCheck).
-#   ☐ Replace all `Set-Location` calls with Push-Location/Pop-Location in try/finally,
-#     or compute absolute paths and avoid directory changes entirely (L155, L220, L468, L538).
-#   ☐ Clean up Report-Temp-* directory after CSV aggregation (L222 creates but never deletes).
-#
-# TODO - code quality
-#   ☐ Implement ShouldProcess for -WhatIf and -Confirm support.
-#
-# OPTIONAL (low priority)
-#   ☐ $using: instead of -ArgumentList — only if initTask merge is removed; not required.
-#   ☐ ForEach-Object -Parallel (PS 7+) — only if moving off Start-Job.
-#   ☐ Add support for Linux VMs with appropriate patch collection logic.
-#   ☐ Implement job result aggregation and summary statistics.
-# -------------------------------------------------------------------------------------------------
