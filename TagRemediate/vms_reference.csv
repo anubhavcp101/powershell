@@ -1,0 +1,11 @@
+VM,ResourceGroup,Subscription,PatchTag
+vm-app-prod-01,rg-app-prod,sub-production-01,prod
+vm-app-prod-02,rg-app-prod,sub-production-01,prod
+vm-db-prod-01,rg-db-prod,sub-production-01,prod
+vm-app-dev-01,rg-app-dev,sub-development-01,dev
+vm-app-dev-02,rg-app-dev,sub-development-01,dev
+vm-web-uat-01,rg-web-uat,sub-staging-01,uat
+vm-web-uat-02,rg-web-uat,sub-staging-01,uat
+vm-test-qa-01,rg-testing-qa,sub-testing-01,qa
+vm-test-qa-02,rg-testing-qa,sub-testing-01,qa
+vm-util-prod-01,rg-shared-prod,sub-production-01,prod
