@@ -21,7 +21,7 @@ if [[ "$ID" =~ ^(ubuntu|debian)$ ]]; then
     echo "deb [signed-by=/usr/share/keyrings/oktapam-2023-archive-keyring.gpg] https://dist.scaleft.com/repos/deb $DISTRIBUTION okta" | sudo tee /etc/apt/sources.list.d/oktapam-stable.list
 	sudo apt-get update
 	sudo apt-cache search scaleft
-	sudo apt-get install scaleft-server-tools -y
+	sudo DEBIAN_FRONTEND=noninteractive apt-get install scaleft-server-tools -y
 elif [[ "$ID" =~ ^(rhel|centos|fedora|almalinux)$ ]]; then
 	sudo rpm --import https://dist.scaleft.com/GPG-KEY-OktaPAM-2023
 		FILE_PATH="/etc/yum.repos.d/oktapam-stable.repo"
