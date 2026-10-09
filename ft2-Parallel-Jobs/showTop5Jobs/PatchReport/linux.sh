@@ -13,6 +13,11 @@ ARR_HOST=( "$HOST_NAME" "$OS_ID" "$PKG_INSTALLED" "$UP_TIME" )
 #
 PKG="$(awk -F'|' -v start="$(date +%Y-%m-)" '$1 ~ start && $2 ~ /install|update/ {print $3 "=" $4}' /var/log/zypp/history | paste -sd';')"
 PKG="${PKG:-NothingInstalled}"
+## Centos
+PKG="$(grep "$(date +%b)" /var/log/yum.log | awk '$4 ~ /Updated|Installed/ {print $5}' | paste -sd ';')"
+
+## RHEL
+PKG="$(rpm -qa --last | grep "$(date +'%b %Y')" | awk '{print $1}' | paste -sd ';')"
 
 ARR_HOST=( "$HOST_NAME" "$OS_ID" "$PKG" "$UP_TIME" )
 (IFS='#'; echo "<x>${ARR_HOST[*]}<x>")
