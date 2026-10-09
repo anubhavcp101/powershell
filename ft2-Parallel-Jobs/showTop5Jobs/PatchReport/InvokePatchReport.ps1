@@ -93,8 +93,9 @@ function Invoke-PatchReport {
                 Write-Output ($outputs -join '#')
             }
             $bashScript = @'
+#!/bin/bash
 UP_TIME="$(uptime | cut -d' ' -f3-7)"
-PKG_INSTALLED="$(grep "$(date +%Y-%m-)" /var/log/dpkg.log | grep " upgrade " | awk '{print $4 '=' $6}' | paste -sd";" -)"
+PKG_INSTALLED="$(grep "$(date +%Y-%m-)" /var/log/dpkg.log | grep " upgrade " | awk '{print $4 "=" $6}' | paste -sd";" -)"
 PKG_INSTALLED="${PKG_INSTALLED:-NothingInstalled}"
 OS_ID="$(source /etc/os-release && echo "$ID")"
 HOST_NAME="$(hostname)"
@@ -184,11 +185,13 @@ ARR_HOST=( "$HOST_NAME" "$OS_ID" "$PKG_INSTALLED" "$UP_TIME" )
                 $runResult = Invoke-RunCommand -VMName $Name -ResourceGroupName $resourceGroup -ScriptBlock $bashScript -Context $ctx -Retry $retry -CommandId 'RunShellScript'
                 $commandOutput = $runResult.CommandOutput.Value[0].Message.Trim().split('<x>')[-2]
                 $commandStatus = $runResult.CommandStatus
+                Write-Output $commandOutput
             }
             elseif ( $vmStatus.OsName -like '*Windows*') {
                 $runResult = Invoke-RunCommand -VMName $Name -ResourceGroupName $resourceGroup -ScriptBlock $hotfixBlock -Context $ctx -Retry $retry -CommandId 'RunPowerShellScript'
                 $commandOutput = $runResult.CommandOutput.Value[0].Message.Trim()
                 $commandStatus = $runResult.CommandStatus
+                Write-Output $commandOutput
             }
             else {
                 Write-Output 'Not a supported VM'
@@ -198,7 +201,7 @@ ARR_HOST=( "$HOST_NAME" "$OS_ID" "$PKG_INSTALLED" "$UP_TIME" )
             if ($commandStatus -eq 'Success') {
                 $expVM = [PSCustomObject]@{
                     'VM'            = $Name.trim();
-                    'CommandOutput' = $commandOutput.Value[0].Message.trim();
+                    'CommandOutput' = $commandOutput;
                     'CommandStatus' = $commandStatus
                 }
             }
@@ -260,15 +263,15 @@ ARR_HOST=( "$HOST_NAME" "$OS_ID" "$PKG_INSTALLED" "$UP_TIME" )
         $vms = @($accumulatedVmList)
         $totalVMs = $vms.Count
 
-        # $columns = $accumulatedVmList[0].PSObject.Members | Where-Object { $_.MemberType -eq 'NoteProperty' } | Select-Object -ExpandProperty Name
+        $columns = $accumulatedVmList[0].PSObject.Members | Where-Object { $_.MemberType -eq 'NoteProperty' } | Select-Object -ExpandProperty Name
         
         # Checking if $accumulatedVmList is array or not and then accordingly getting columns from it.
-        if ($accumulatedVmList -is [Array]) {
-            $columns = $accumulatedVmList[0].PSObject.Members | Where-Object { $_.MemberType -eq 'NoteProperty' } | Select-Object -ExpandProperty Name
-        }
-        else {
-            $columns = $accumulatedVmList.PSObject.Members | Where-Object { $_.MemberType -eq 'NoteProperty' } | Select-Object -ExpandProperty Name
-        }
+        # if ($accumulatedVmList -is [Array]) {
+        #     $columns = $accumulatedVmList[0].PSObject.Members | Where-Object { $_.MemberType -eq 'NoteProperty' } | Select-Object -ExpandProperty Name
+        # }
+        # else {
+        #     $columns = $accumulatedVmList.PSObject.Members | Where-Object { $_.MemberType -eq 'NoteProperty' } | Select-Object -ExpandProperty Name
+        # }
 
         $missing = Compare-Object -ReferenceObject $requiredColumns -DifferenceObject $columns | Where-Object { ($_.SideIndicator -eq '<=') } 
         if ( $missing ) { $missing | ForEach-Object { Write-Warning "Missing column: $($_.InputObject)" }; return 1 }  
