@@ -1,0 +1,5 @@
+Server,Status,Value
+ServerA,Running,200
+ServerA,Stopped,200
+ServerB,Running,200
+ServerB,Running,180

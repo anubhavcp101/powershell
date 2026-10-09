@@ -34,11 +34,12 @@ function Invoke-AzVMRunCommand {
 "@
 
             # Read updateReport.ps1 and inject mockHeader directly into the $task definition block
-            $scriptContent = Get-Content ".\updateReport.ps1" -Raw
+            $scriptContent = Get-Content (Join-Path $PSScriptRoot 'updateReport.ps1') -Raw
             $injectedScript = $scriptContent -replace '(\$task\s*=\s*\{)', "`$1`n$mockHeader"
 
             # Execute the injected script in local scope
-            Invoke-Expression $injectedScript
+            $PSScriptRoot = (Get-Location).Path
+Invoke-Expression $injectedScript
 
             # Reset working directory back to script root (since updateReport.ps1 changes location to Report-Temp-*)
             Set-Location $PSScriptRoot

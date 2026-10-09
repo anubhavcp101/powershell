@@ -92,6 +92,87 @@ function Invoke-PatchReport {
                 $outputs = @($serverName, $osName, $hotfix, $uptime)
                 Write-Output ($outputs -join '#')
             }
+            $bashScript = @'
+UP_TIME="$(uptime | cut -d' ' -f3-7)"
+PKG_INSTALLED="$(grep "$(date +%Y-%m-)" /var/log/dpkg.log | grep " upgrade " | awk '{print $4 '=' $6}' | paste -sd";" -)"
+PKG_INSTALLED="${PKG_INSTALLED:-NothingInstalled}"
+OS_ID="$(source /etc/os-release && echo "$ID")"
+HOST_NAME="$(hostname)"
+ARR_HOST=( "$HOST_NAME" "$OS_ID" "$PKG_INSTALLED" "$UP_TIME" )
+#
+(IFS='#'; echo "<x>${ARR_HOST[*]}<x>")
+'@
+
+
+            function Invoke-RunCommand {
+                [CmdletBinding(DefaultParameterSetName = 'ScriptBlock')]
+                param(
+                    [Parameter(Mandatory, Position = 0)]
+                    [string]$VMName,
+                    [Parameter(Mandatory, Position = 1)]
+                    [string]$ResourceGroupName,
+                    # Either a script block or a path to a .ps1 file containing the script to execute
+                    [Parameter(Mandatory, ParameterSetName = 'ScriptBlock', Position = 2)]
+                    [string]$ScriptBlock,
+                    [Parameter(Mandatory, ParameterSetName = 'ScriptPath', Position = 2)]
+                    [ValidateScript({ Test-Path $_ -PathType Leaf })]
+                    [string]$ScriptPath,
+                    [Parameter(Position = 3)]
+                    [ValidateSet('RunPowerShellScript', 'RunShellScript')]
+                    [string]$CommandId = 'RunPowerShellScript',
+                    [Parameter()]
+                    [object]$Context,
+                    [int]$Retry = 3,
+                    [int]$BaseDelaySeconds = 30,
+                    [switch]$EnableJitter,
+                    [switch]$EnableExponentialBackoff
+                )
+
+                $attempt = 0
+                do {
+                    $attempt++
+                    try {
+                        if ($PSCmdlet.ParameterSetName -eq 'ScriptBlock') {
+                            $commandOutput = Invoke-AzVMRunCommand -VMName $VMName.Trim() -ResourceGroupName $ResourceGroupName.Trim() -CommandId $CommandId -ScriptString $ScriptBlock -DefaultProfile $Context -ErrorAction Stop
+                        }
+                        else {
+                            $commandOutput = Invoke-AzVMRunCommand -VMName $VMName.Trim() -ResourceGroupName $ResourceGroupName.Trim() -CommandId $CommandId -ScriptPath $ScriptPath -DefaultProfile $Context -ErrorAction Stop
+                        }
+                        if ($?) {
+                            $commandStatus = 'Success'
+                            Write-Output $commandOutput.Value[0].Message.Trim()
+                            $commandOutput | Export-Clixml -Depth 3 -Force -Path (Join-Path $reportTempDir "output-xml-$($VMName).xml")
+                            break
+                        }
+                    }
+                    catch {
+                        Write-Output "Attempt $($attempt): An Error Occurred"
+                        Write-Output $_.Exception.Message
+                        $commandOutput = "Command Failed: $($_.Exception.Message)"
+                        $commandStatus = 'Failed'
+                        if ($attempt -lt $Retry) {
+                            $delay = $BaseDelaySeconds
+                            if ($EnableExponentialBackoff) {
+                                $delay = $BaseDelaySeconds * [math]::Pow(2, $attempt - 1)
+                            }
+                            if ($EnableJitter) {
+                                $delay = Get-Random -Minimum 0 -Maximum $delay
+                            }
+                            Write-Output "Retry will be attempted after a delay of $delay seconds (attempt $attempt)"
+                            Start-Sleep -Seconds $delay
+                        }
+                        elseif ($attempt -eq $Retry) {
+                            Write-Output "Retried $($attempt) times but it failed. Please check $($VMName)"
+                        }
+                    }
+                } while ($attempt -lt $Retry)
+
+                return [PSCustomObject]@{
+                    CommandOutput = $commandOutput
+                    CommandStatus = $commandStatus
+                }
+            }
+
             $ctx = Set-AzContext -Subscription $subscription.trim() -ErrorAction Stop -Scope Process
             $vmStatus = Get-AzVM -Status -Name $Name.trim() -ResourceGroupName $resourceGroup.trim() -DefaultProfile $ctx -ErrorAction Stop
             if (($vmStatus.Statuses[1].DisplayStatus -ne 'VM running') -or ( -not ($vmStatus.VMAgent)) ) {
@@ -99,38 +180,20 @@ function Invoke-PatchReport {
                 $commandStatus = 'Failed'
                 $commandOutput = 'VM not running'
             }
-            elseif ($vmStatus.OsName -notlike '*Windows*') {
+            elseif ($vmStatus.OsName -like '*ubuntu*') {
+                $runResult = Invoke-RunCommand -VMName $Name -ResourceGroupName $resourceGroup -ScriptBlock $bashScript -Context $ctx -Retry $retry -CommandId 'RunShellScript'
+                $commandOutput = $runResult.CommandOutput.Value[0].Message.Trim().split('<x>')[-2]
+                $commandStatus = $runResult.CommandStatus
+            }
+            elseif ( $vmStatus.OsName -like '*Windows*') {
+                $runResult = Invoke-RunCommand -VMName $Name -ResourceGroupName $resourceGroup -ScriptBlock $hotfixBlock -Context $ctx -Retry $retry -CommandId 'RunPowerShellScript'
+                $commandOutput = $runResult.CommandOutput.Value[0].Message.Trim()
+                $commandStatus = $runResult.CommandStatus
+            }
+            else {
                 Write-Output 'Not a windows VM'
                 $commandStatus = 'Failed'
                 $commandOutput = 'Not a Windows VM'
-            }
-            else {
-                $attempt = 0
-                do {
-                    $attempt++
-                    try {
-                        $commandOutput = Invoke-AzVMRunCommand -VMName $Name.trim() -ResourceGroupName $resourceGroup.trim() -CommandId 'RunPowerShellScript' -ScriptString $hotfixBlock.ToString() -DefaultProfile $ctx -ErrorAction Stop
-                        if ($?) {
-                            $commandStatus = 'Success'
-                            Write-Output $commandOutput.Value[0].Message.trim()
-                            break
-                        }
-                    }
-                    catch {
-                        Write-Output "Attempt $($attempt): An Error Occurred"
-                        Write-Output $PSItem.tostring()
-                        Write-Output $PSItem.ScriptStackTrace
-                        $commandOutput = "Command Failed: $($PSItem.tostring())"
-                        $commandStatus = 'Failed'
-                        if ($attempt -lt $retry) {
-                            Write-Output "Retry will be attempted after a delay of $(30*$attempt) seconds"
-                            Start-Sleep -Seconds (30 * $attempt)
-                        }
-                        elseif ($attempt -eq $retry) {
-                            Write-Output "Retried $($attempt) times but it failed. Please check $($Name)"
-                        }
-                    }
-                } while ($attempt -lt $retry)
             }
             if ($commandStatus -eq 'Success') {
                 $expVM = [PSCustomObject]@{
