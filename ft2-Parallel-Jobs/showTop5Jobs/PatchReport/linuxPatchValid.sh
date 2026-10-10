@@ -20,7 +20,7 @@ case "$OS_ID" in
     fi
     ;;
   *)
-    PKG_INSTALLED="OS detection failed"
+    PKG_INSTALLED="OS detection failed - $OS_ID"
     ;;
 esac
 PKG_INSTALLED="${PKG_INSTALLED:-NothingInstalled}"
