@@ -8,9 +8,10 @@ case "$OS_ID" in
     #
     PKG_INSTALLED="$(grep "$(date +%Y-%m-)" /var/log/dpkg.log | grep " upgrade " | awk '{print $4 "=" $6}' | paste -sd ';' -)"
     ;;
-  suse|opensuse*)
-    PKG_INSTALLED="$(awk -F'|' -v start="$(date +%Y-%m-)" '$1 ~ start && $2 ~ /install|update/ {print $3 "=" $4}' /var/log/zypp/history | paste -sd ';')"
+  suse|sles|opensuse*)
+    PKG_INSTALLED="$(grep "$(date +'%Y-%m')" /var/log/zypp/history | awk -F'|' '$2 ~ /install|update/ { print $3 "=" $4}' | paste -sd ';')"
     #
+    echo "$(awk -F'|' -v start="$(date +%Y-%m-)" '$1 ~ start && $2 ~ /install|update/ {print $3 "=" $4}' /var/log/zypp/history | paste -sd ';')"
     ;;
   centos|rhel|fedora|rocky|alma)
     if [[ -f /var/log/yum.log ]]; then

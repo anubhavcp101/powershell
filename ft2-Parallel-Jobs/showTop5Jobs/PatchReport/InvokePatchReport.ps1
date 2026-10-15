@@ -142,7 +142,7 @@ ARR_HOST=( "$HOST_NAME" "$OS_ID" "$PKG_INSTALLED" "$UP_TIME" )
                         if ($?) {
                             $commandStatus = 'Success'
                             Write-Output $commandOutput.Value[0].Message.Trim()
-                            $commandOutput | Export-Clixml -Depth 3 -Force -Path (Join-Path $reportTempDir "output-xml-$($VMName).xml")
+                            $commandOutput | Export-Clixml -Depth 3 -Force -Path (Join-Path "$($PWD.Path)" "output-xml-$($VMName).xml")
                             break
                         }
                     }
@@ -198,20 +198,13 @@ ARR_HOST=( "$HOST_NAME" "$OS_ID" "$PKG_INSTALLED" "$UP_TIME" )
                 $commandStatus = 'Failed'
                 $commandOutput = 'Not a supported VM'
             }
-            if ($commandStatus -eq 'Success') {
-                $expVM = [PSCustomObject]@{
-                    'VM'            = $Name.trim();
-                    'CommandOutput' = $commandOutput;
-                    'CommandStatus' = $commandStatus
-                }
+ 
+            $expVM = [PSCustomObject]@{
+                'VM'            = $Name.trim();
+                'CommandOutput' = $commandOutput;
+                'CommandStatus' = $commandStatus
             }
-            else {
-                $expVM = [PSCustomObject]@{
-                    'VM'            = $Name.trim();
-                    'CommandOutput' = $commandOutput;
-                    'CommandStatus' = $commandStatus
-                }
-            }
+            
             $expVM | Export-Csv -NoTypeInformation -Path (Join-Path $reportTempDir "$($Name.trim()).csv") -Force -Append
         }
 

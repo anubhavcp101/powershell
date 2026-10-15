@@ -19,7 +19,14 @@ function Invoke-RunCommand {
         [int]$Retry = 3,
         [int]$BaseDelaySeconds = 30,
         [switch]$EnableJitter,
-        [switch]$EnableExponentialBackoff
+        [switch]$EnableExponentialBackoff,
+        # Delimiter used to capture relevant output from the command response.
+        # Wrap the relevant portion of your remote script output with this delimiter.
+        # e.g. echo "<x>$relevantData<x>"
+        [string]$Delimiter = '<x>',
+        # Folder path where the XML output from Export-Clixml will be saved.
+        [ValidateScript({ Test-Path $_ -PathType Container })]
+        [string]$XmlOutputPath = $PWD.Path
     )
 
     # # Resolve the script contents based on the active parameter set
@@ -43,6 +50,7 @@ function Invoke-RunCommand {
             if ($?) {
                 $commandStatus = 'Success'
                 Write-Output $commandOutput.Value[0].Message.Trim()
+                $commandOutput | Export-Clixml -Depth 3 -Force -Path (Join-Path $XmlOutputPath "$($VMName).xml")
                 break
             }
         }
@@ -67,6 +75,21 @@ function Invoke-RunCommand {
             }
         }
     } while ($attempt -lt $Retry)
+
+    # If Delimiter was explicitly passed, extract relevant output between the delimiter markers
+    if (($PSBoundParameters.ContainsKey('Delimiter')) -and ($commandStatus -eq 'Success') -and $commandOutput.Value[0].Message) {
+        $fullMessage = $commandOutput.Value[0].Message.Trim()
+        if ($fullMessage.Contains($Delimiter) -and ( ($fullMessage.Split($Delimiter).Length) -ge 2 ) ) {
+            $segments = $fullMessage.Split($Delimiter)
+            # The relevant content sits between the last pair of delimiters (second-to-last segment)
+            $commandOutput = $segments[-2].Trim()
+        }
+        else {
+            # No delimiters found — fall back to the full message 
+            Write-Warning "Delimiter `'$Delimiter`' not found in the command output for VM `'$VMName`'. Falling back to full output."
+            $commandOutput = $fullMessage
+        }
+    }
 
     return [PSCustomObject]@{
         CommandOutput = $commandOutput

@@ -19,5 +19,6 @@ PKG="$(grep "$(date +%b)" /var/log/yum.log | awk '$4 ~ /Updated|Installed/ {prin
 ## RHEL
 PKG="$(rpm -qa --last | grep "$(date +'%b %Y')" | awk '{print $1}' | paste -sd ';')"
 
+PKG="${PKG:-NothingInstalled}"
 ARR_HOST=( "$HOST_NAME" "$OS_ID" "$PKG" "$UP_TIME" )
 (IFS='#'; echo "<x>${ARR_HOST[*]}<x>")
