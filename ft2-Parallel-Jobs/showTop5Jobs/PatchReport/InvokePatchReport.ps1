@@ -126,7 +126,9 @@ ARR_HOST=( "$HOST_NAME" "$OS_ID" "$PKG_INSTALLED" "$UP_TIME" )
                     [int]$Retry = 3,
                     [int]$BaseDelaySeconds = 30,
                     [switch]$EnableJitter,
-                    [switch]$EnableExponentialBackoff
+                    [switch]$EnableExponentialBackoff,
+                    [ValidateScript({ Test-Path $_ -PathType Container })]
+                    [string]$XmlOutputPath = $PWD.Path
                 )
 
                 $attempt = 0
@@ -142,7 +144,7 @@ ARR_HOST=( "$HOST_NAME" "$OS_ID" "$PKG_INSTALLED" "$UP_TIME" )
                         if ($?) {
                             $commandStatus = 'Success'
                             Write-Output $commandOutput.Value[0].Message.Trim()
-                            $commandOutput | Export-Clixml -Depth 3 -Force -Path (Join-Path "$($PWD.Path)" "output-xml-$($VMName).xml")
+                            $commandOutput | Export-Clixml -Depth 3 -Force -Path (Join-Path $XmlOutputPath "output-xml-$($VMName).xml")
                             break
                         }
                     }
@@ -182,13 +184,13 @@ ARR_HOST=( "$HOST_NAME" "$OS_ID" "$PKG_INSTALLED" "$UP_TIME" )
                 $commandOutput = 'VM not running'
             }
             elseif ($vmStatus.OsName -like '*ubuntu*') {
-                $runResult = Invoke-RunCommand -VMName $Name -ResourceGroupName $resourceGroup -ScriptBlock $bashScript -Context $ctx -Retry $retry -CommandId 'RunShellScript'
+                $runResult = Invoke-RunCommand -VMName $Name -ResourceGroupName $resourceGroup -ScriptBlock $bashScript -Context $ctx -Retry $retry -CommandId 'RunShellScript' -XmlOutputPath $reportTempDir
                 $commandOutput = $runResult.CommandOutput.Value[0].Message.Trim().split('<x>')[-2]
                 $commandStatus = $runResult.CommandStatus
                 Write-Output $commandOutput
             }
             elseif ( $vmStatus.OsName -like '*Windows*') {
-                $runResult = Invoke-RunCommand -VMName $Name -ResourceGroupName $resourceGroup -ScriptBlock $hotfixBlock -Context $ctx -Retry $retry -CommandId 'RunPowerShellScript'
+                $runResult = Invoke-RunCommand -VMName $Name -ResourceGroupName $resourceGroup -ScriptBlock $hotfixBlock -Context $ctx -Retry $retry -CommandId 'RunPowerShellScript' -XmlOutputPath $reportTempDir
                 $commandOutput = $runResult.CommandOutput.Value[0].Message.Trim()
                 $commandStatus = $runResult.CommandStatus
                 Write-Output $commandOutput
