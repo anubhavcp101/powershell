@@ -1,5 +1,5 @@
 #!/bin/bash
-UP_TIME="$(uptime | cut -d' ' -f3-7)"
+UP_TIME="$(uptime | cut -d' ' -f3-7)" # "$(uptime -p)"
 OS_ID="$(source /etc/os-release && echo "$ID")"
 HOST_NAME="$(hostname)"
 

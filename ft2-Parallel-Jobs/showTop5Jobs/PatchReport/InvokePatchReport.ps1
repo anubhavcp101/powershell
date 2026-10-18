@@ -176,6 +176,8 @@ ARR_HOST=( "$HOST_NAME" "$OS_ID" "$PKG_INSTALLED" "$UP_TIME" )
                 }
             }
 
+            if ( -not ( Test-Path (Join-Path $reportTempDir 'xml')) ) { New-Item -ItemType Directory -Path (Join-Path $reportTempDir 'xml') -Force }
+
             $ctx = Set-AzContext -Subscription $subscription.trim() -ErrorAction Stop -Scope Process
             $vmStatus = Get-AzVM -Status -Name $Name.trim() -ResourceGroupName $resourceGroup.trim() -DefaultProfile $ctx -ErrorAction Stop
             if (($vmStatus.Statuses[1].DisplayStatus -ne 'VM running') -or ( -not ($vmStatus.VMAgent)) ) {
@@ -184,13 +186,13 @@ ARR_HOST=( "$HOST_NAME" "$OS_ID" "$PKG_INSTALLED" "$UP_TIME" )
                 $commandOutput = 'VM not running'
             }
             elseif ($vmStatus.OsName -like '*ubuntu*') {
-                $runResult = Invoke-RunCommand -VMName $Name -ResourceGroupName $resourceGroup -ScriptBlock $bashScript -Context $ctx -Retry $retry -CommandId 'RunShellScript' -XmlOutputPath $reportTempDir
+                $runResult = Invoke-RunCommand -VMName $Name -ResourceGroupName $resourceGroup -ScriptBlock $bashScript -Context $ctx -Retry $retry -CommandId 'RunShellScript' -XmlOutputPath (Join-Path $reportTempDir 'xml')
                 $commandOutput = $runResult.CommandOutput.Value[0].Message.Trim().split('<x>')[-2]
                 $commandStatus = $runResult.CommandStatus
                 Write-Output $commandOutput
             }
             elseif ( $vmStatus.OsName -like '*Windows*') {
-                $runResult = Invoke-RunCommand -VMName $Name -ResourceGroupName $resourceGroup -ScriptBlock $hotfixBlock -Context $ctx -Retry $retry -CommandId 'RunPowerShellScript' -XmlOutputPath $reportTempDir
+                $runResult = Invoke-RunCommand -VMName $Name -ResourceGroupName $resourceGroup -ScriptBlock $hotfixBlock -Context $ctx -Retry $retry -CommandId 'RunPowerShellScript' -XmlOutputPath (Join-Path $reportTempDir 'xml')
                 $commandOutput = $runResult.CommandOutput.Value[0].Message.Trim()
                 $commandStatus = $runResult.CommandStatus
                 Write-Output $commandOutput
@@ -424,9 +426,9 @@ ARR_HOST=( "$HOST_NAME" "$OS_ID" "$PKG_INSTALLED" "$UP_TIME" )
         if (($null -ne $limit) -and ($limit -ne '')) {
             $vms = Limit-Input -inputs $vms -limit $limit
             if ( $vms -and ($vms.Count -gt 0)) {
-                Write-Output "Continue to try on below VMs?"
+                Write-Output 'Continue to try on below VMs?'
                 $vms | Format-Table -AutoSize -Wrap
-                $continue = Read-Host "Continue (y/n)"
+                $continue = Read-Host 'Continue (y/n)'
                 if ($continue -in @('n', 'N')) {
                     return
                 }
@@ -784,9 +786,66 @@ Start-Sleep -Seconds 5
         }
         Pop-Location
 
-        $reportLocation = Join-Path $wrkdir "Report-$(Get-Date -Format 'dd-MM-yyyy-hh-mm').csv"
+        #<//>
+        $reportLocation = Join-Path (Join-Path $wrkdir $reportTempDir) "Report-$(Get-Date -Format 'dd-MM-yyyy-hh-mm').csv"
         $report | Export-Csv -NoTypeInformation -Force -Path $reportLocation
         Write-Output "Report Generated at: $($reportLocation)"
+
+        #<//>
+        $missingVMs = Compare-Object -ReferenceObject $vms.Name -DifferenceObject ((Import-Csv $reportLocation).VMName) | Where-Object { $_.SideIndicator -eq '<=' } 
+        $fullReport = $report
+        if ($missingVMs) {
+            foreach ( $missedVM in $missingVMs) {
+                $fullReport += [PSCustomObject]@{
+                    'VMName'        = $missedVM.InputObject
+                    'HostName'      = 'Error'
+                    'OS'            = 'Error'
+                    'Patches'       = 'Error'
+                    'Uptime'        = 'Error'
+                    'CommandStatus' = 'Failed'
+                    'CommandOutput' = 'NA'
+                }
+            }
+        }
+        $fullReportPath = Join-Path $wrkdir "FullReport-$(Get-Date -Format 'dd-MM-yyyy-hh-mm').csv"
+        $fullReport | Export-Csv -NoTypeInformation -Path $fullReportPath
+        Write-Output "Full Report Generated at: $($fullReportPath)"
+        $env:FullReportPath = $fullReportPath
+        Set-Clipboard -Value $fullReportPath
+
+        $startTime = Get-Date -Hour 16 -Minute 30 -Second 0
+        $timespan = (Get-Date) - $startTime
+        $windowsUptimePattern = '(?<days>\d+)days,(?<hours>\d+)hrs,(?<minutes>\d+)mins'
+        $linuxUptimePattern = 'upto\s+(?<minutes>\d+)min,\s+(?<days>\d+)'
+        $windowsNoRebootVMs = $fullReport | Where-Object {
+            (( $_.OS -like '*Windows*' ) -and ($_.Uptime.split('days')[0].Trim() -match '\d+') -and ( [int]($_.Uptime.split('days')[0].Trim()) -gt 0 )) -or
+            ( $_.OS -like 'Error' )
+        }
+        if ($windowsNoRebootVMs) {
+            Write-Warning "Following Windows VMs may not be rebooted. Please check"
+            Write-Warning $windowsNoRebootVMs | Select-Object VMName, Uptime, Patches
+        }
+
+        $linuxNoRebootVMs = $fullReport | Where-Object {
+            ( $_.OS -notlike '*Windows*') -and
+            ( -not ($_.OS -like 'Error') ) -and
+            (($_.Uptime.split(',')[-1].Trim()) -match '\d+') -and
+            ( [int]($_.Uptime.split(',')[-1].Trim()) -gt 0 )
+        }
+        if ($linuxNoRebootVMs) {
+            Write-Warning "Following Linux VMs may not be rebooted. Please check"
+            Write-Warning $linuxNoRebootVMs | Select-Object VMName, Uptime, Patches
+        }
+
+        $VMsWithNothingInstalled = $fullReport | Where-Object {
+            ( -not ($_.OS -like 'Error')) -and
+            ( $_.Patches -like 'nothingInstalled')
+        }
+        if ( $VMsWithNothingInstalled) {
+            Write-Warning "Following VMs may not have patches installed. Please verify"
+            Write-Warning $VMsWithNothingInstalled | Select-Object VMName, Uptime, Patches
+        }
+        #<//>
 
         $summaryFile = Join-Path $folderName 'jobSummary.csv'
         $notStartedLog = Join-Path $folderName 'notStartedJobs.csv'
