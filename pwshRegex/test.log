@@ -1,0 +1,10 @@
+May 12 14:22:05 Installed: apr-1.4.8-7.el7.x86_64
+May 12 14:22:06 Installed: apr-util-1.5.2-6.el7.x86_64
+May 12 14:23:12 Installed: httpd-tools-2.4.6-97.el7.centos.5.x86_64
+May 12 14:23:15 Installed: httpd-2.4.6-97.el7.centos.5.x86_64
+Oct 09 09:11:43 Updated: curl-7.29.0-59.el7_9.1.x86_64
+Oct 09 09:11:44 Updated: libcurl-7.29.0-59.el7_9.1.x86_64
+Oct 09 10:05:22 Erased: nano-2.3.2-10.el7.x86_64
+Oct 09 10:20:07 Updated: curl-7.29.0-59.el7_9.2.x86_64
+Oct 09 10:20:09 Updated: curl-7.29.0-60.el7_9.1.x86_64
+Oct 09 10:20:10 Updated: libcurl-7.29.0-60.el7_9.1.x86_64
