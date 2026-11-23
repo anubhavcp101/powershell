@@ -5,10 +5,12 @@ $paths = @(
     "C:\WindowsAzure\Logs",
     "C:\Packages\Plugins",
     "C:\inetpub\logs\LogFiles",
+    #
     "C:\Windows\SoftwareDistribution\Download",
     "C:\Windows\MEMORY.DMP",
     "C:\Windows\Minidump",
     "C:\Windows\Panther"
+    #
     "C:\Windows\Logs\DISM",
     "C:\Windows\Logs\CBS",
     "C:\Windows\System32\LogFiles",
